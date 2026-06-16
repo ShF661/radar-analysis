@@ -198,9 +198,9 @@ function render() {
 
   // 样本说明
   if (S.trustOnly) {
-    $('sample-info').textContent = `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）`;
+    $('sample-info').textContent = `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）· 每25秒自动刷新`;
   } else {
-    $('sample-info').textContent = `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）`;
+    $('sample-info').textContent = `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）· 每25秒自动刷新`;
   }
 
   // 空态
@@ -366,3 +366,9 @@ $('modal').onclick = (e) => { if (e.target.id === 'modal') $('modal').classList.
   renderThresholds();
   render();
 })();
+
+// 自动刷新：每 25 秒拉一次最新数据，让新采集到的币自动出现（弹窗打开时跳过，避免打断阅读）
+setInterval(async () => {
+  if (!$('modal').classList.contains('hidden')) return;
+  try { S.tokens = await (await fetch('/api/tokens')).json(); render(); } catch (e) {}
+}, 25000);
