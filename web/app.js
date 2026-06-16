@@ -1,11 +1,11 @@
 // ===== 金狗雷达 GMGN 特征分析 · 前端（桶为中心，全前端计算）=====
-// 数据源：/api/tokens（全量行，含数值+时间戳）、/api/defaults（阈值+特征名）。
+// 数据源：/api/tokens（全量行）、/api/defaults（阈值+特征名）。
 // 可信过滤 / 分桶 / 特征派生 / 占比基准lift / 联动筛选 全部在浏览器完成。
 
 const TRUST_MAX_DELAY_MIN = 5;   // 采集延迟 ≤ 5 分钟视为“第一时间采集”
 const SMALL_SAMPLE = 10;         // 桶内 < 10 个 → 样本太少警告
 
-// 三个维度：最高涨幅 / 最小涨幅（同一个最高涨幅值，看小头）/ 最大跌幅
+// 维度：全部 / 最高涨幅 / 最小涨幅（同一最高涨幅值，看小头）/ 最大跌幅
 const DIMS = {
   peak_high: {
     label: '最高涨幅', column: 'peak_gain_pct', sortDir: 'desc',
@@ -86,7 +86,7 @@ const COLUMNS = [
 
 // ===== 状态 =====
 const S = {
-  dimKey: 'peak_high',
+  dimKey: 'all',
   bucketLabel: null,
   trustOnly: false,
   thresholds: {},
@@ -168,14 +168,15 @@ async function loadAll() {
   S.tokens = await (await fetch('/api/tokens')).json();
 }
 
-// ===== 渲染 =====
 function workingSet() {
   return S.trustOnly ? S.tokens.filter(trustworthy) : S.tokens.slice();
 }
 
+// ===== 维度按钮（含“全部”）=====
 function renderDimSeg() {
-  $('dim-seg').innerHTML = Object.entries(DIMS)
-    .map(([k, d]) => `<button data-k="${k}" class="${k === S.dimKey ? 'active' : ''}">${d.label}</button>`).join('');
+  const items = [['all', '全部'], ...Object.entries(DIMS).map(([k, d]) => [k, d.label])];
+  $('dim-seg').innerHTML = items.map(([k, label]) =>
+    `<button data-k="${k}" class="${k === S.dimKey ? 'active' : ''}">${label}</button>`).join('');
   $('dim-seg').querySelectorAll('button').forEach((b) =>
     b.onclick = () => { S.dimKey = b.dataset.k; S.bucketLabel = null; S.activeFeature = null; S.sortCol = null; render(); });
 }
@@ -188,20 +189,53 @@ function renderThresholds() {
     i.onchange = () => { const n = parseFloat(i.value); if (!isNaN(n)) { S.thresholds[i.dataset.k] = n; render(); } });
 }
 
+// ===== 代币表（全部 / 桶内 共用）=====
+function paintTable(rows, feats) {
+  let list = rows.slice();
+  const tip = $('feat-filter-tip');
+  if (feats && S.activeFeature) {
+    list = list.filter((r) => feats[r.task_id][S.activeFeature] === true);
+    tip.classList.remove('hidden');
+    tip.innerHTML = `已只看命中特征「${esc(S.featureLabels[S.activeFeature] || S.activeFeature)}」的 ${list.length} 个币 <button id="clr-feat">✕ 清除</button>`;
+    $('clr-feat').onclick = () => { S.activeFeature = null; render(); };
+  } else tip.classList.add('hidden');
+
+  if (!S.sortCol) { S.sortCol = 'peak_gain_pct'; S.sortDir = 'desc'; }
+  list.sort((a, b) => {
+    const x = a[S.sortCol], y = b[S.sortCol];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1; if (y == null) return -1;
+    if (typeof x === 'string') return S.sortDir === 'asc' ? String(x).localeCompare(y) : String(y).localeCompare(x);
+    return S.sortDir === 'asc' ? x - y : y - x;
+  });
+
+  const head = COLUMNS.map((c) => {
+    const arrow = c.key === S.sortCol ? (S.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+    return `<th class="${c.first ? 'first' : ''}" data-c="${c.key}">${esc(c.label)}${arrow}</th>`;
+  }).join('');
+  const body = list.map((r, i) =>
+    `<tr data-i="${i}">` + COLUMNS.map((c) => `<td class="${c.first ? 'first' : ''}">${cellHtml(r, c)}</td>`).join('') + `</tr>`).join('');
+  $('table').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  $('table').querySelectorAll('th').forEach((th) =>
+    th.onclick = () => {
+      const c = th.dataset.c;
+      if (S.sortCol === c) S.sortDir = S.sortDir === 'asc' ? 'desc' : 'asc';
+      else { S.sortCol = c; S.sortDir = 'desc'; }
+      render();
+    });
+  $('table').querySelectorAll('tbody tr').forEach((tr) =>
+    tr.onclick = () => showDetail(list[+tr.dataset.i]));
+}
+
+// ===== 渲染 =====
 function render() {
-  const dim = DIMS[S.dimKey];
-  // 维度按钮高亮跟随当前维度
-  $("dim-seg").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.k === S.dimKey));
+  $('dim-seg').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.k === S.dimKey));
   const ws = workingSet();
   const total = S.tokens.length;
   const trustCount = S.tokens.filter(trustworthy).length;
-
-  // 样本说明
-  if (S.trustOnly) {
-    $('sample-info').textContent = `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）· 每25秒自动刷新`;
-  } else {
-    $('sample-info').textContent = `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）· 每25秒自动刷新`;
-  }
+  $('sample-info').textContent = S.trustOnly
+    ? `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）· 每25秒自动刷新`
+    : `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）· 每25秒自动刷新`;
 
   // 空态
   if (!ws.length) {
@@ -216,41 +250,50 @@ function render() {
   }
   $('empty').classList.add('hidden');
 
+  // 「全部」：不分桶，平铺所有币
+  if (S.dimKey === 'all') {
+    $('sec-buckets').classList.add('hidden');
+    $('sec-features').classList.add('hidden');
+    $('tbl-title').innerHTML = `全部代币（${ws.length} 个）<span class="muted sub"> （点任意行看完整指标；点表头排序）</span>`;
+    paintTable(ws, null);
+    return;
+  }
+  $('sec-buckets').classList.remove('hidden');
+  $('sec-features').classList.remove('hidden');
+  $('tbl-title').innerHTML = `B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span>`;
+
+  const dim = DIMS[S.dimKey];
+
   // 特征派生
   const feats = {};
   for (const r of ws) feats[r.task_id] = deriveFeatures(r);
 
   // 维度行 + 分桶
   const dimRows = ws.filter((r) => r[dim.column] != null);
-
-  // 桶计数
   const counts = {};
   for (const b of dim.buckets) counts[b.label] = 0;
   for (const r of dimRows) { const lb = assignBucket(r[dim.column], dim.buckets); if (lb) counts[lb]++; }
-
-  // 默认选桶：优先维度默认桶；若它没数据，则自动选数量最多的非空桶
   if (!S.bucketLabel || !dim.buckets.some((b) => b.label === S.bucketLabel)) {
     S.bucketLabel = dim.defaultBucket;
     if (!counts[S.bucketLabel]) {
-      const best = dim.buckets.map((b) => b.label).filter((l) => counts[l] > 0)
-        .sort((a, b) => counts[b] - counts[a])[0];
+      const best = dim.buckets.map((b) => b.label).filter((l) => counts[l] > 0).sort((a, b) => counts[b] - counts[a])[0];
       if (best) S.bucketLabel = best;
     }
   }
 
-  // 桶导航（带数量）
+  // 桶导航
   $('bucket-seg').innerHTML = dim.buckets.map((b) =>
     `<button data-b="${esc(b.label)}" class="${b.label === S.bucketLabel ? 'active' : ''}">${esc(b.label)} (${counts[b.label]})</button>`).join('');
   $('bucket-seg').querySelectorAll('button').forEach((btn) =>
     btn.onclick = () => { S.bucketLabel = btn.dataset.b; S.activeFeature = null; S.sortCol = null; render(); });
 
-  // 当前桶成员
+  // 当前桶
   const members = dimRows.filter((r) => assignBucket(r[dim.column], dim.buckets) === S.bucketLabel);
   const pct = dimRows.length ? Math.round(members.length / dimRows.length * 100) : 0;
   $('bucket-head').innerHTML = `${dim.label} ${esc(S.bucketLabel)} <span class="meta">${members.length} 个币，占样本 ${pct}%</span>`;
   $('small-warn').classList.toggle('hidden', members.length >= SMALL_SAMPLE);
 
-  // ===== A. 共同特征 =====
+  // A. 共同特征
   const baseline = {};
   for (const f of FEATURE_DEFS) baseline[f.key] = rate(dimRows, f.key, feats);
   const stats = FEATURE_DEFS.map((f) => {
@@ -258,8 +301,7 @@ function render() {
     const base = baseline[f.key].rate;
     const lift = (m.rate != null && base != null) ? m.rate - base : null;
     return { key: f.key, label: S.featureLabels[f.key] || f.key, ...m, baseline: base, lift };
-  }).filter((s) => s.rate != null)
-    .sort((a, b) => (b.lift ?? -9) - (a.lift ?? -9));
+  }).filter((s) => s.rate != null).sort((a, b) => (b.lift ?? -9) - (a.lift ?? -9));
 
   $('features').innerHTML = stats.map((s) => {
     const up = (s.lift ?? 0) > 0.0001;
@@ -275,43 +317,9 @@ function render() {
   $('features').querySelectorAll('.feat').forEach((el) =>
     el.onclick = () => { S.activeFeature = (S.activeFeature === el.dataset.f) ? null : el.dataset.f; render(); });
 
-  // ===== B. 代币明细（可被特征筛选）=====
-  let rows = members.slice();
-  if (S.activeFeature) rows = rows.filter((r) => feats[r.task_id][S.activeFeature] === true);
-
-  const tip = $('feat-filter-tip');
-  if (S.activeFeature) {
-    tip.classList.remove('hidden');
-    tip.innerHTML = `已只看命中特征「${esc(S.featureLabels[S.activeFeature] || S.activeFeature)}」的 ${rows.length} 个币 <button id="clr-feat">✕ 清除</button>`;
-    $('clr-feat').onclick = () => { S.activeFeature = null; render(); };
-  } else tip.classList.add('hidden');
-
-  // 排序（默认按当前维度列）
+  // B. 代币明细（按当前维度列默认排序）
   if (!S.sortCol) { S.sortCol = dim.column; S.sortDir = dim.sortDir; }
-  rows.sort((a, b) => {
-    const x = a[S.sortCol], y = b[S.sortCol];
-    if (x == null && y == null) return 0;
-    if (x == null) return 1; if (y == null) return -1;
-    if (typeof x === 'string') return S.sortDir === 'asc' ? String(x).localeCompare(y) : String(y).localeCompare(x);
-    return S.sortDir === 'asc' ? x - y : y - x;
-  });
-
-  const head = COLUMNS.map((c) => {
-    const arrow = c.key === S.sortCol ? (S.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
-    return `<th class="${c.first ? 'first' : ''}" data-c="${c.key}">${esc(c.label)}${arrow}</th>`;
-  }).join('');
-  const body = rows.map((r, i) =>
-    `<tr data-i="${i}">` + COLUMNS.map((c) => `<td class="${c.first ? 'first' : ''}">${cellHtml(r, c)}</td>`).join('') + `</tr>`).join('');
-  $('table').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
-  $('table').querySelectorAll('th').forEach((th) =>
-    th.onclick = () => {
-      const c = th.dataset.c;
-      if (S.sortCol === c) S.sortDir = S.sortDir === 'asc' ? 'desc' : 'asc';
-      else { S.sortCol = c; S.sortDir = 'desc'; }
-      render();
-    });
-  $('table').querySelectorAll('tbody tr').forEach((tr) =>
-    tr.onclick = () => showDetail(rows[+tr.dataset.i]));
+  paintTable(members, feats);
 }
 
 // ===== 单币完整详情 =====

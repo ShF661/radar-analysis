@@ -16,10 +16,10 @@
     <div class="ctl-row">
       <span class="ctl-label">分桶维度</span>
       <div id="dim-seg" class="seg"></div>
+      <label class="chk push-right"><input type="checkbox" id="trust" /> 只看第一时间采集的可信样本（延迟&lt;5分钟）</label>
     </div>
 
     <div class="ctl-row">
-      <label class="chk"><input type="checkbox" id="trust" /> 只看第一时间采集的可信样本（延迟&lt;5分钟）</label>
       <span id="sample-info" class="muted"></span>
     </div>
 
@@ -30,20 +30,20 @@
     </details>
   </header>
 
-  <section class="pad">
+  <section class="pad" id="sec-buckets">
     <div id="bucket-seg" class="seg bucket-seg"></div>
     <div id="bucket-head" class="bucket-head"></div>
     <div id="small-warn" class="warn hidden">⚠️ 该桶样本太少（&lt;10），统计仅供参考</div>
   </section>
 
-  <section class="pad">
+  <section class="pad" id="sec-features">
     <h2>A · 这组的共同特征<span class="muted sub"> （绿=高于大盘=共同特征；灰=不高于。点一行可在下方只看命中该特征的币）</span></h2>
     <div id="feat-filter-tip" class="filter-tip hidden"></div>
     <div id="features"></div>
   </section>
 
   <section class="pad">
-    <h2>B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span></h2>
+    <h2 id="tbl-title">B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span></h2>
     <div class="table-wrap"><div id="table"></div></div>
   </section>
 

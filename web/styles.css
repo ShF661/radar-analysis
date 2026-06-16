@@ -83,3 +83,5 @@ tbody tr:hover td.first { background: #1f2535; }
 
 .empty { padding: 40px 24px; color: #aeb6c4; font-size: 14px; line-height: 1.7; }
 .empty button { margin-top: 10px; }
+
+.push-right { margin-left: auto; }
