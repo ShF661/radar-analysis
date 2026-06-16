@@ -8,30 +8,50 @@
 </head>
 <body>
   <header>
-    <h1>金狗雷达 · GMGN 特征分析</h1>
-    <div class="controls">
-      <label>分桶维度
-        <select id="dimension">
-          <option value="peak_gain_pct">最高涨幅</option>
-          <option value="max_drop_pct">最大跌幅</option>
-          <option value="final_gain_pct">最终涨幅</option>
-        </select>
-      </label>
-      <button id="refresh">刷新</button>
-      <span id="status"></span>
+    <div class="title-row">
+      <h1>金狗雷达 · GMGN 特征分析</h1>
+      <button id="reload" class="ghost">刷新数据</button>
     </div>
+
+    <div class="ctl-row">
+      <span class="ctl-label">分桶维度</span>
+      <div id="dim-seg" class="seg"></div>
+    </div>
+
+    <div class="ctl-row">
+      <label class="chk"><input type="checkbox" id="trust" checked /> 只看第一时间采集的可信样本（延迟&lt;5分钟）</label>
+      <span id="sample-info" class="muted"></span>
+    </div>
+
+    <details id="thr-box" class="thr">
+      <summary>特征阈值微调</summary>
+      <div id="thr-grid" class="thr-grid"></div>
+      <button id="thr-reset" class="ghost sm">恢复默认</button>
+    </details>
   </header>
 
-  <section id="cohorts"></section>
-
-  <section>
-    <h2>明细（点行看详情）</h2>
-    <div id="table"></div>
+  <section class="pad">
+    <div id="bucket-seg" class="seg bucket-seg"></div>
+    <div id="bucket-head" class="bucket-head"></div>
+    <div id="small-warn" class="warn hidden">⚠️ 该桶样本太少（&lt;10），统计仅供参考</div>
   </section>
+
+  <section class="pad">
+    <h2>A · 这组的共同特征<span class="muted sub"> （绿=高于大盘=共同特征；灰=不高于。点一行可在下方只看命中该特征的币）</span></h2>
+    <div id="feat-filter-tip" class="filter-tip hidden"></div>
+    <div id="features"></div>
+  </section>
+
+  <section class="pad">
+    <h2>B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span></h2>
+    <div class="table-wrap"><div id="table"></div></div>
+  </section>
+
+  <div id="empty" class="empty hidden"></div>
 
   <div id="modal" class="modal hidden">
     <div class="modal-box">
-      <button id="modal-close">×</button>
+      <button id="modal-close" aria-label="close">×</button>
       <div id="modal-body"></div>
     </div>
   </div>
