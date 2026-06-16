@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 from typing import Any, Optional
 
 
@@ -62,3 +64,52 @@ def parse_token_security(raw: Any) -> dict:
         "rug_ratio": _f(d.get("rug_ratio")),
         "burn_status": d.get("burn_status", None),
     }
+
+
+_CHAIN_MAP = {
+    "solana": "sol", "sol": "sol",
+    "ethereum": "eth", "eth": "eth",
+    "bsc": "bsc", "bnb": "bsc",
+    "base": "base",
+}
+
+
+def normalize_chain(chain: str) -> str:
+    return _CHAIN_MAP.get((chain or "").lower(), (chain or "").lower())
+
+
+def run_gmgn(cli: str, sub: str, chain: str, address: str) -> Any:
+    """调用 `gmgn-cli token <sub> --chain <chain> --address <addr> --raw`，返回解析后的 JSON。"""
+    proc = subprocess.run(
+        [cli, "token", sub, "--chain", chain, "--address", address, "--raw"],
+        capture_output=True, text=True, timeout=60,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"gmgn-cli {sub} failed: {proc.stderr.strip()[:200]}")
+    out = proc.stdout.strip()
+    if not out:
+        raise RuntimeError(f"gmgn-cli {sub} empty output")
+    return json.loads(out)
+
+
+def fetch_snapshot(cli: str, chain: str, address: str) -> dict:
+    """抓 info+security 合成入场快照；失败时 gmgn_ok=False 并保留已得字段。"""
+    snap: dict = {"gmgn_ok": False}
+    try:
+        info_raw = run_gmgn(cli, "info", chain, address)
+        snap.update(parse_token_info(info_raw))
+        sec_raw = run_gmgn(cli, "security", chain, address)
+        snap.update(parse_token_security(sec_raw))
+        snap["gmgn_ok"] = True
+    except Exception:
+        return snap
+    return snap
+
+
+def fetch_market_cap(cli: str, chain: str, address: str) -> Optional[float]:
+    """价格刷新用：只取当前市值。失败返回 None。"""
+    try:
+        info = parse_token_info(run_gmgn(cli, "info", chain, address))
+        return info["market_cap"]
+    except Exception:
+        return None

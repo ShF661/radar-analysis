@@ -49,3 +49,38 @@ def test_parse_token_info_missing_fields_safe():
     assert info["price"] is None
     assert info["market_cap"] is None
     assert info["smart_wallets"] is None
+
+
+from app import gmgn as gmgn_mod
+
+
+def test_normalize_chain():
+    assert gmgn_mod.normalize_chain("solana") == "sol"
+    assert gmgn_mod.normalize_chain("ethereum") == "eth"
+    assert gmgn_mod.normalize_chain("BSC") == "bsc"
+    assert gmgn_mod.normalize_chain("base") == "base"
+    assert gmgn_mod.normalize_chain("sol") == "sol"
+
+
+def test_fetch_snapshot_merges_info_and_security(monkeypatch):
+    info = _load("token_info.json")
+    sec = _load("token_security.json")
+
+    def fake_run(cli, sub, chain, address):
+        return info if sub == "info" else sec
+
+    monkeypatch.setattr(gmgn_mod, "run_gmgn", fake_run)
+    snap = gmgn_mod.fetch_snapshot("gmgn-cli", "sol", "TKN")
+    assert snap["gmgn_ok"] is True
+    assert snap["market_cap"] == 500000
+    assert snap["rug_ratio"] == 0.12
+    assert snap["is_honeypot"] == "no"
+
+
+def test_fetch_snapshot_failure_sets_flag(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("cli failed")
+
+    monkeypatch.setattr(gmgn_mod, "run_gmgn", boom)
+    snap = gmgn_mod.fetch_snapshot("gmgn-cli", "sol", "TKN")
+    assert snap["gmgn_ok"] is False
