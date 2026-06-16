@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 import uvicorn
 
@@ -10,7 +11,21 @@ from app.config import load_settings
 from app.db import Database
 
 
+def _load_env() -> None:
+    from pathlib import Path
+    f = Path(".env")
+    if not f.exists():
+        return
+    for line in f.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
 def main() -> None:
+    _load_env()
     parser = argparse.ArgumentParser(description="金狗雷达 GMGN 特征分析")
     parser.add_argument("mode", choices=["collector", "api", "all"], help="运行模式")
     args = parser.parse_args()

@@ -20,6 +20,7 @@ class Settings:
     db_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "./radar.db"))
     gmgn_cli: str = field(default_factory=lambda: os.getenv("GMGN_CLI", "gmgn-cli"))
     api_port: int = field(default_factory=lambda: int(os.getenv("API_PORT", "8000")))
+    gmgn_delay: float = field(default_factory=lambda: float(os.getenv("GMGN_DELAY", "0.8")))
 
 
 def load_settings() -> Settings:

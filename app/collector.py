@@ -103,10 +103,15 @@ class Collector:
             try:
                 for task in self._client.fetch_completed_tasks():
                     base = parse_task(task)
-                    if base and base["chain"] in self.s.chains:
-                        process_new_task(self.db, task, self._snapshot_fn)
+                    if not base or base["chain"] not in self.s.chains:
+                        continue
+                    if self.db.exists(base["task_id"]):
+                        continue
+                    process_new_task(self.db, task, self._snapshot_fn)
+                    print(f"[discover] saved {base.get('symbol')} ({base['chain']}) task={base['task_id']}", flush=True)
+                    self._stop.wait(self.s.gmgn_delay)
             except Exception as e:  # 单次失败不致命
-                print(f"[discover] error: {e}")
+                print(f"[discover] error: {e}", flush=True)
             self._stop.wait(self.s.discover_interval)
 
     def price_loop(self) -> None:
@@ -118,8 +123,9 @@ class Collector:
                         continue
                     refresh_one(self.db, tid, self._market_cap_fn,
                                 self.s.track_hours, row.get("chain") or "", row.get("address") or "")
+                    self._stop.wait(self.s.gmgn_delay)
             except Exception as e:
-                print(f"[price] error: {e}")
+                print(f"[price] error: {e}", flush=True)
             self._stop.wait(self.s.price_interval)
 
     def run(self) -> None:

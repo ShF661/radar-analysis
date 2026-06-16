@@ -99,7 +99,7 @@ def run_gmgn(cli: str, sub: str, chain: str, address: str) -> Any:
     exe = shutil.which(cli) or cli
     proc = subprocess.run(
         [exe, "token", sub, "--chain", chain, "--address", address, "--raw"],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
     )
     if proc.returncode != 0:
         raise RuntimeError(f"gmgn-cli {sub} failed: {proc.stderr.strip()[:200]}")
