@@ -185,8 +185,16 @@ function symCell(r) {
 function fallbackCopy(text, done) {
   try { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (e) {}
 }
-function copyText(text, el) {
-  const done = () => { if (!el) return; const o = el.textContent; el.textContent = '已复制✓'; setTimeout(() => { el.textContent = o; }, 1500); };
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+function copyText(text) {
+  const done = () => toast('已复制合约地址');
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
   else fallbackCopy(text, done);
 }
