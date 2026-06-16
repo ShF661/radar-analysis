@@ -53,16 +53,29 @@ const FEATURE_DEFS = [
   { key: 'high_rug', fn: (r, t) => gt(r.rug_ratio, t.high_rug) },
   { key: 'high_entrapment', fn: (r, t) => gt(r.entrapment_rate, t.high_entrapment) },
   { key: 'low_holders', fn: (r, t) => lt(r.holder_count, t.low_holders) },
-  { key: 'honeypot', fn: (r) => r.is_honeypot == null ? null : r.is_honeypot === 'yes' },
-  { key: 'not_open_source', fn: (r) => r.open_source == null ? null : r.open_source === 'no' },
-  { key: 'not_renounced', fn: (r) => r.owner_renounced == null ? null : r.owner_renounced === 'no' },
-  { key: 'has_tax', fn: (r) => {
-      if (r.buy_tax == null && r.sell_tax == null) return null;
-      return (r.buy_tax || 0) > 0 || (r.sell_tax || 0) > 0;
-    } },
+  { key: 'security_risk', fn: (r) => securityFlag(r) },
 ];
 const gt = (v, t) => v == null ? null : v > t;
 const lt = (v, t) => v == null ? null : v < t;
+
+// 安全风险：只讲“哪里有风险”，无风险不展开
+function securityRisks(r) {
+  const out = [];
+  if (r.is_honeypot === 'yes') out.push('蜜罐（能买不能卖）');
+  if ((r.buy_tax || 0) > 0) out.push('买税 ' + Math.round(r.buy_tax * 100) + '%');
+  if ((r.sell_tax || 0) > 0) out.push('卖税 ' + Math.round(r.sell_tax * 100) + '%');
+  if (r.rug_ratio != null && r.rug_ratio > 0.3) out.push('rug风险高 (' + r.rug_ratio + ')');
+  if (r.owner_renounced === 'no') out.push('合约未弃权');
+  if (r.open_source === 'no') out.push('合约未开源');
+  return out;
+}
+function securityFlag(r) {
+  if (securityRisks(r).length) return true;          // 有风险
+  const hasData = [r.is_honeypot, r.open_source, r.owner_renounced, r.buy_tax, r.sell_tax, r.rug_ratio].some((v) => v != null);
+  return hasData ? false : null;                     // 有数据但无风险=false；完全无数据=null(不统计)
+}
+const LOCAL_LABELS = { security_risk: '有安全风险' };
+const labelOf = (k) => S.featureLabels[k] || LOCAL_LABELS[k] || k;
 
 // B 表列：身份/结果 + 钱包构成 + 规模集中度（安全类只在详情弹窗）
 const COLUMNS = [
@@ -196,7 +209,7 @@ function paintTable(rows, feats) {
   if (feats && S.activeFeature) {
     list = list.filter((r) => feats[r.task_id][S.activeFeature] === true);
     tip.classList.remove('hidden');
-    tip.innerHTML = `已只看命中特征「${esc(S.featureLabels[S.activeFeature] || S.activeFeature)}」的 ${list.length} 个币 <button id="clr-feat">✕ 清除</button>`;
+    tip.innerHTML = `已只看命中特征「${esc(labelOf(S.activeFeature))}」的 ${list.length} 个币 <button id="clr-feat">✕ 清除</button>`;
     $('clr-feat').onclick = () => { S.activeFeature = null; render(); };
   } else tip.classList.add('hidden');
 
@@ -300,7 +313,7 @@ function render() {
     const m = rate(members, f.key, feats);
     const base = baseline[f.key].rate;
     const lift = (m.rate != null && base != null) ? m.rate - base : null;
-    return { key: f.key, label: S.featureLabels[f.key] || f.key, ...m, baseline: base, lift };
+    return { key: f.key, label: labelOf(f.key), ...m, baseline: base, lift };
   }).filter((s) => s.rate != null).sort((a, b) => (b.lift ?? -9) - (a.lift ?? -9));
 
   $('features').innerHTML = stats.map((s) => {
@@ -346,10 +359,10 @@ function showDetail(r) {
         ['老鼠仓', fRate(r.rat_rate)], ['钓鱼钱包', fRate(r.entrapment_rate)], ['机器人占比', fRate(r.bot_degen_rate)],
       ])}
        <div class="sec">安全风险</div>
-       ${rowsHtml([
-        ['蜜罐', r.is_honeypot], ['rug风险', r.rug_ratio], ['买税', fRate(r.buy_tax)], ['卖税', fRate(r.sell_tax)],
-        ['开源', r.open_source], ['弃权', r.owner_renounced], ['烧池', r.burn_status],
-      ])}
+       ${(() => { const risks = securityRisks(r);
+          return risks.length
+            ? risks.map((x) => `<div class="k">⚠️</div><div style="color:#ff6b6b">${esc(x)}</div>`).join('')
+            : `<div class="k"></div><div style="color:#4ade80">无明显风险</div>`; })()}
        <div class="sec">推送后表现</div>
        ${rowsHtml([
         ['最高涨幅', fGain(r.peak_gain_pct)], ['最大跌幅', fDrop(r.max_drop_pct)],
