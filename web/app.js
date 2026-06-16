@@ -190,6 +190,8 @@ function renderThresholds() {
 
 function render() {
   const dim = DIMS[S.dimKey];
+  // 维度按钮高亮跟随当前维度
+  $("dim-seg").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.k === S.dimKey));
   const ws = workingSet();
   const total = S.tokens.length;
   const trustCount = S.tokens.filter(trustworthy).length;
