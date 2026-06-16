@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import os
 
 import uvicorn
@@ -25,6 +26,11 @@ def _load_env() -> None:
 
 
 def main() -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     _load_env()
     parser = argparse.ArgumentParser(description="金狗雷达 GMGN 特征分析")
     parser.add_argument("mode", choices=["collector", "api", "all"], help="运行模式")
