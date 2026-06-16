@@ -1,4 +1,4 @@
-from app.features import derive_metrics, derive_features, DEFAULT_THRESHOLDS, FEATURE_LABELS
+from app.features import derive_metrics, DEFAULT_THRESHOLDS, FEATURE_LABELS
 
 
 def test_derive_metrics_turnover_and_avg_holding():
@@ -13,31 +13,7 @@ def test_derive_metrics_safe_on_missing():
     assert m["avg_holding_usd"] is None
 
 
-def test_derive_features_flags():
-    row = {
-        "smart_wallets": 0, "kol_wallets": 0, "bundler_rate": 0.35,
-        "fresh_wallet_rate": 0.55, "rat_rate": 0.12, "top10_rate": 0.42,
-        "dev_hold_rate": 0.06, "bot_degen_rate": 0.4, "turnover": 0.24,
-        "liquidity": 25000, "is_honeypot": "no", "open_source": "yes",
-        "owner_renounced": "no", "rug_ratio": 0.12, "entrapment_rate": 0.08,
-        "holder_count": 320, "buy_tax": 0.03, "sell_tax": 0.03,
-    }
-    f = derive_features(row, DEFAULT_THRESHOLDS)
-    assert f["smart_money_zero"] is True
-    assert f["kol_zero"] is True
-    assert f["high_bundler"] is True       # 0.35 > 0.30
-    assert f["high_fresh"] is True         # 0.55 > 0.50
-    assert f["not_renounced"] is True
-    assert f["honeypot"] is False
-    assert f["has_tax"] is True
-
-
-def test_derive_features_none_when_missing():
-    f = derive_features({"smart_wallets": None}, DEFAULT_THRESHOLDS)
-    assert f["smart_money_zero"] is None
-
-
-def test_every_feature_has_label():
-    f = derive_features({}, DEFAULT_THRESHOLDS)
-    for key in f:
+def test_thresholds_have_labels():
+    # 阈值键都应有中文名（前端阈值编辑器用得到）
+    for key in DEFAULT_THRESHOLDS:
         assert key in FEATURE_LABELS

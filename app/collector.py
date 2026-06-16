@@ -7,7 +7,7 @@ from typing import Callable
 
 from app.config import Settings
 from app.db import Database
-from app.features import DEFAULT_THRESHOLDS, derive_features, derive_metrics  # noqa: F401 (derive_features 供将来用)
+from app.features import derive_metrics
 from app.gmgn import fetch_market_cap, fetch_snapshot
 from app.radar import RadarClient, parse_task
 
@@ -85,7 +85,10 @@ def refresh_one(db: Database, task_id: str, market_cap_fn: MarketCapFn,
     if mc is not None and mc > 0:
         db.update_price(task_id, current_market_cap=mc)
     if expired:
-        db.finalize(task_id)
+        latest = db.get(task_id)
+        # 只在拿到过真实涨幅时才定格；从未定价成功的不 finalize（下轮继续尝试），避免写入 NULL/陈旧值
+        if latest and latest.get("current_gain_pct") is not None:
+            db.finalize(task_id)
 
 
 class Collector:
@@ -118,6 +121,10 @@ class Collector:
                     self._stop.wait(self.s.gmgn_delay)
             except Exception as e:  # 单次失败不致命
                 print(f"[discover] error: {e}", flush=True)
+                try:
+                    self._client.login()  # 会话可能过期，重新登录后下轮恢复
+                except Exception as e2:
+                    print(f"[discover] relogin failed: {e2}", flush=True)
             self._stop.wait(self.s.discover_interval)
 
     def price_loop(self) -> None:
@@ -127,12 +134,14 @@ class Collector:
                     row = self.db.get(tid)
                     if not row:
                         continue
-                    # 自愈：之前没抓到 GMGN 细分指标的，重试补齐
-                    if not row.get("gmgn_ok") or (row.get("chain") == "sol" and row.get("renounced_mint") is None):
+                    # 自愈：之前没抓到 GMGN 细分指标的，重试补齐（最多 5 次，避免对 GMGN 无数据的币无限重试）
+                    needs = not row.get("gmgn_ok") or (row.get("chain") == "sol" and row.get("renounced_mint") is None)
+                    if needs and (row.get("enrich_attempts") or 0) < 5:
                         snap = self._snapshot_fn(row.get("chain") or "", row.get("address") or "")
                         if snap.get("gmgn_ok"):
                             self.db.update_snapshot(tid, snap)
                             print(f"[price] re-enriched {row.get('symbol')}", flush=True)
+                        self.db.bump_enrich(tid)
                         self._stop.wait(self.s.gmgn_delay)
                     refresh_one(self.db, tid, self._market_cap_fn,
                                 self.s.track_hours, row.get("chain") or "", row.get("address") or "")

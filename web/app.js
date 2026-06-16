@@ -198,7 +198,7 @@ function renderDimSeg() {
   $('dim-seg').innerHTML = items.map(([k, label]) =>
     `<button data-k="${k}" class="${k === S.dimKey ? 'active' : ''}">${label}</button>`).join('');
   $('dim-seg').querySelectorAll('button').forEach((b) =>
-    b.onclick = () => { S.dimKey = b.dataset.k; S.bucketLabel = null; S.activeFeature = null; S.sortCol = null; render(); });
+    b.onclick = () => { S.dimKey = b.dataset.k; S.bucketLabel = null; S.activeFeature = null; S.sortCol = null; S.search = ''; $('search').value = ''; render(); });
 }
 
 function renderThresholds() {
@@ -263,6 +263,7 @@ function render() {
     $('empty').classList.add('hidden');
     $('sec-buckets').classList.add('hidden');
     $('sec-features').classList.add('hidden');
+    $('thr-box').classList.add('hidden');
     const list = S.tokens.filter((r) => (r.symbol || '').toLowerCase().includes(q) || (r.address || '').toLowerCase().includes(q));
     $('tbl-title').innerHTML = `搜索 “${esc(S.search.trim())}”：${list.length} 个 <span class="muted sub">（跨全部数据，忽略可信过滤；点行看详情）</span>`;
     paintTable(list, null);
@@ -286,12 +287,14 @@ function render() {
   if (S.dimKey === 'all') {
     $('sec-buckets').classList.add('hidden');
     $('sec-features').classList.add('hidden');
+    $('thr-box').classList.add('hidden');
     $('tbl-title').innerHTML = `全部代币（${ws.length} 个）<span class="muted sub"> （点任意行看完整指标；点表头排序）</span>`;
     paintTable(ws, null);
     return;
   }
   $('sec-buckets').classList.remove('hidden');
   $('sec-features').classList.remove('hidden');
+  $('thr-box').classList.remove('hidden');
   $('tbl-title').innerHTML = `B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span>`;
 
   const dim = DIMS[S.dimKey];
@@ -399,6 +402,7 @@ $('search').oninput = (e) => { S.search = e.target.value; render(); };
 $('thr-reset').onclick = () => { S.thresholds = { ...S.defaultThresholds }; renderThresholds(); render(); };
 $('modal-close').onclick = () => $('modal').classList.add('hidden');
 $('modal').onclick = (e) => { if (e.target.id === 'modal') $('modal').classList.add('hidden'); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('modal').classList.add('hidden'); });
 
 // ===== 启动 =====
 (async () => {

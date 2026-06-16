@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
-
+# 阈值：把连续数值指标转成“是/否”特征的判定线。前端 /api/defaults 取用。
 DEFAULT_THRESHOLDS = {
     "high_bundler": 0.30,
     "high_fresh": 0.50,
@@ -16,6 +15,9 @@ DEFAULT_THRESHOLDS = {
     "low_holders": 100,
 }
 
+# 特征中文名。前端 /api/defaults 取用。
+# 注意：特征派生 / 分桶 / 占比统计的“唯一权威实现”在前端 web/app.js（按链区分），
+# 后端不再重复实现，避免两份逻辑漂移。
 FEATURE_LABELS = {
     "smart_money_zero": "聪明钱买入 = 0",
     "kol_zero": "KOL 买入 = 0",
@@ -30,57 +32,15 @@ FEATURE_LABELS = {
     "high_rug": "rug 风险高",
     "high_entrapment": "钓鱼钱包占比高",
     "low_holders": "持有人少",
-    "honeypot": "蜜罐",
-    "not_open_source": "合约未开源",
-    "not_renounced": "未弃权",
-    "has_tax": "有买卖税",
+    "security_risk": "有安全风险",
 }
 
 
 def derive_metrics(row: dict) -> dict:
+    """派生指标：换手率 = 成交量/市值，人均持币 = 市值/持有人数。"""
     vol = row.get("volume_24h")
     mc = row.get("market_cap")
     hc = row.get("holder_count")
     turnover = (vol / mc) if (vol is not None and mc) else None
     avg = (mc / hc) if (mc is not None and hc) else None
     return {"turnover": turnover, "avg_holding_usd": avg}
-
-
-def _gt(v: Optional[float], thr: float) -> Optional[bool]:
-    return None if v is None else v > thr
-
-
-def _lt(v: Optional[float], thr: float) -> Optional[bool]:
-    return None if v is None else v < thr
-
-
-def derive_features(row: dict, thr: dict) -> dict:
-    sw = row.get("smart_wallets")
-    kol = row.get("kol_wallets")
-    honeypot = row.get("is_honeypot")
-    osrc = row.get("open_source")
-    renounced = row.get("owner_renounced")
-    buy_tax = row.get("buy_tax")
-    sell_tax = row.get("sell_tax")
-    tax = None
-    if buy_tax is not None or sell_tax is not None:
-        tax = (buy_tax or 0) > 0 or (sell_tax or 0) > 0
-    return {
-        "smart_money_zero": None if sw is None else sw == 0,
-        "kol_zero": None if kol is None else kol == 0,
-        "high_bundler": _gt(row.get("bundler_rate"), thr["high_bundler"]),
-        "high_fresh": _gt(row.get("fresh_wallet_rate"), thr["high_fresh"]),
-        "high_rat": _gt(row.get("rat_rate"), thr["high_rat"]),
-        "high_top10": _gt(row.get("top10_rate"), thr["high_top10"]),
-        "high_dev": _gt(row.get("dev_hold_rate"), thr["high_dev"]),
-        "high_bot": _gt(row.get("bot_degen_rate"), thr["high_bot"]),
-        "low_turnover": _lt(row.get("turnover"), thr["low_turnover"]),
-        "low_liquidity": _lt(row.get("liquidity"), thr["low_liquidity"]),
-        "high_rug": _gt(row.get("rug_ratio"), thr["high_rug"]),
-        "high_entrapment": _gt(row.get("entrapment_rate"), thr["high_entrapment"]),
-        "low_holders": _lt(row.get("holder_count"), thr["low_holders"]),
-        "honeypot": None if honeypot is None else honeypot == "yes",
-        "not_open_source": None if osrc is None else osrc == "no",
-        "not_renounced": None if renounced is None else renounced == "no",
-        "has_tax": tax,
-    }

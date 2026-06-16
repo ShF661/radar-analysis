@@ -38,14 +38,5 @@ def test_token_detail(tmp_path):
 def test_defaults_endpoint(tmp_path):
     c = _client(tmp_path)
     d = c.get("/api/defaults").json()
-    assert "gain_buckets" in d and "drop_buckets" in d and "thresholds" in d
-
-
-def test_analysis_endpoint(tmp_path):
-    c = _client(tmp_path)
-    r = c.post("/api/analysis", json={"dimension": "peak_gain_pct"})
-    assert r.status_code == 200
-    body = r.json()
-    low = next(b for b in body["buckets"] if b["label"] == "<50%")
-    smz = next(f for f in low["features"] if f["feature"] == "smart_money_zero")
-    assert smz["bucket_rate"] == 1.0
+    assert "thresholds" in d and "feature_labels" in d
+    assert "security_risk" in d["feature_labels"]

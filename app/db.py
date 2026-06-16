@@ -16,7 +16,7 @@ COLUMNS = [
     "gmgn_ok", "base_market_cap",
     "current_gain_pct", "peak_gain_pct", "max_drop_pct", "final_gain_pct",
     "peak_market_cap", "min_market_cap", "track_status", "last_priced_at",
-    "created_at", "updated_at",
+    "created_at", "updated_at", "enrich_attempts",
 ]
 
 
@@ -122,6 +122,14 @@ class Database:
             sets = [f'"{k}"=?' for k in self.GMGN_FIELDS] + ['"gmgn_ok"=?', '"updated_at"=?']
             vals = [snap.get(k) for k in self.GMGN_FIELDS] + [1 if snap.get("gmgn_ok") else 0, _now(), task_id]
             self._conn.execute(f"UPDATE tokens SET {','.join(sets)} WHERE task_id=?", vals)
+            self._conn.commit()
+
+    def bump_enrich(self, task_id: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE tokens SET enrich_attempts = COALESCE(enrich_attempts, 0) + 1 WHERE task_id=?",
+                (task_id,),
+            )
             self._conn.commit()
 
     def close(self) -> None:
