@@ -103,5 +103,20 @@ class Database:
             )
             self._conn.commit()
 
+    GMGN_FIELDS = [
+        "top10_rate", "dev_hold_rate", "rat_rate", "entrapment_rate", "bundler_rate",
+        "fresh_wallet_rate", "bot_degen_rate", "smart_wallets", "kol_wallets",
+        "is_honeypot", "rug_ratio", "buy_tax", "sell_tax", "open_source",
+        "owner_renounced", "burn_status",
+    ]
+
+    def update_snapshot(self, task_id: str, snap: dict) -> None:
+        """补齐之前没抓到的 GMGN 细分指标；不触碰价格追踪与推送时字段。"""
+        with self._lock:
+            sets = [f'"{k}"=?' for k in self.GMGN_FIELDS] + ['"gmgn_ok"=?', '"updated_at"=?']
+            vals = [snap.get(k) for k in self.GMGN_FIELDS] + [1 if snap.get("gmgn_ok") else 0, _now(), task_id]
+            self._conn.execute(f"UPDATE tokens SET {','.join(sets)} WHERE task_id=?", vals)
+            self._conn.commit()
+
     def close(self) -> None:
         self._conn.close()

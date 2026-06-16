@@ -121,6 +121,13 @@ class Collector:
                     row = self.db.get(tid)
                     if not row:
                         continue
+                    # 自愈：之前没抓到 GMGN 细分指标的，重试补齐
+                    if not row.get("gmgn_ok"):
+                        snap = self._snapshot_fn(row.get("chain") or "", row.get("address") or "")
+                        if snap.get("gmgn_ok"):
+                            self.db.update_snapshot(tid, snap)
+                            print(f"[price] re-enriched {row.get('symbol')}", flush=True)
+                        self._stop.wait(self.s.gmgn_delay)
                     refresh_one(self.db, tid, self._market_cap_fn,
                                 self.s.track_hours, row.get("chain") or "", row.get("address") or "")
                     self._stop.wait(self.s.gmgn_delay)
