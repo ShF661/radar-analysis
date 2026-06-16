@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from typing import Any, Optional
 
@@ -93,8 +94,11 @@ def normalize_chain(chain: str) -> str:
 
 def run_gmgn(cli: str, sub: str, chain: str, address: str) -> Any:
     """调用 `gmgn-cli token <sub> --chain <chain> --address <addr> --raw`，返回解析后的 JSON。"""
+    # Windows 上 npm 全局命令是 gmgn-cli.CMD 这类 shim，subprocess 不带 shell 解析不到裸名，
+    # 用 shutil.which 解析成完整可执行路径（跨平台安全；解析失败回退原名）。
+    exe = shutil.which(cli) or cli
     proc = subprocess.run(
-        [cli, "token", sub, "--chain", chain, "--address", address, "--raw"],
+        [exe, "token", sub, "--chain", chain, "--address", address, "--raw"],
         capture_output=True, text=True, timeout=60,
     )
     if proc.returncode != 0:
