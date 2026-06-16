@@ -1,0 +1,11 @@
+# 机密与本地数据，切勿提交
+.env
+radar.db
+radar.db-journal
+radar.db-wal
+radar.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
