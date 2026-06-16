@@ -61,14 +61,18 @@ const lt = (v, t) => v == null ? null : v < t;
 // 安全风险：只讲“哪里有风险”，无风险不展开
 function securityRisks(r) {
   const out = [];
+  const isEvm = r.chain && r.chain !== 'sol';   // 开源/弃权是 EVM 概念，SOL 不适用
+  // SOL 专属：铸币权 / 冻结权
   if (r.chain === 'sol' && r.renounced_mint === 'no') out.push('铸币权未放弃（开发者可增发砸盘）');
   if (r.chain === 'sol' && r.renounced_freeze === 'no') out.push('冻结权未放弃（开发者可冻结你的钱包）');
+  // 通用
   if (r.is_honeypot === 'yes') out.push('蜜罐（能买不能卖）');
   if ((r.buy_tax || 0) > 0) out.push('买税 ' + Math.round(r.buy_tax * 100) + '%');
   if ((r.sell_tax || 0) > 0) out.push('卖税 ' + Math.round(r.sell_tax * 100) + '%');
   if (r.rug_ratio != null && r.rug_ratio > 0.3) out.push('rug风险高 (' + r.rug_ratio + ')');
-  if (r.owner_renounced === 'no') out.push('合约未弃权');
-  if (r.open_source === 'no') out.push('合约未开源');
+  // EVM 专属：合约弃权 / 开源验证
+  if (isEvm && r.owner_renounced === 'no') out.push('合约未弃权');
+  if (isEvm && r.open_source === 'no') out.push('合约未开源');
   return out;
 }
 function securityFlag(r) {
