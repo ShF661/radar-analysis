@@ -27,10 +27,12 @@ def _parse_iso(ts: str | None) -> datetime | None:
 def build_entry_row(task: dict, snapshot: dict) -> dict:
     base = parse_task(task) or {}
     row: dict = dict(base)
-    # GMGN 字段优先覆盖（更细），金狗雷达字段作回退
+    # 推送时字段（价格/流动性/市值/成交量/持有人）优先用金狗雷达的“推送瞬间”值，
+    # GMGN 只在金狗雷达缺失时兜底——因为 GMGN 返回的是“当前”值，不是推送时值。
     for k in ("price", "liquidity", "market_cap", "volume_24h", "holder_count"):
-        if snapshot.get(k) is not None:
+        if row.get(k) is None and snapshot.get(k) is not None:
             row[k] = snapshot[k]
+    # 细分指标（钱包构成/安全）只有 GMGN 有，直接取。
     for k in ("top10_rate", "dev_hold_rate", "rat_rate", "entrapment_rate",
               "bundler_rate", "fresh_wallet_rate", "bot_degen_rate",
               "smart_wallets", "kol_wallets", "is_honeypot", "rug_ratio",
@@ -38,13 +40,13 @@ def build_entry_row(task: dict, snapshot: dict) -> dict:
         row[k] = snapshot.get(k)
     if row.get("top10_rate") is None and base.get("top10_position") is not None:
         row["top10_rate"] = base["top10_position"]
-    if snapshot.get("creation_timestamp") is not None:
+    if row.get("creation_timestamp") is None and snapshot.get("creation_timestamp") is not None:
         row["creation_timestamp"] = snapshot["creation_timestamp"]
     # 派生
     metrics = derive_metrics(row)
     row["turnover"] = metrics["turnover"]
     row["avg_holding_usd"] = metrics["avg_holding_usd"]
-    # 追踪基准
+    # 追踪基准 = 推送时市值
     row["base_market_cap"] = row.get("market_cap")
     row["track_status"] = "tracking"
     row["gmgn_ok"] = 1 if snapshot.get("gmgn_ok") else 0
