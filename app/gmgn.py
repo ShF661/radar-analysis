@@ -26,6 +26,19 @@ def _i(v: Any) -> Optional[int]:
     return int(f) if f is not None else None
 
 
+def _yn(v: Any) -> Optional[str]:
+    if v is None or v == "":
+        return None
+    if isinstance(v, bool):
+        return "yes" if v else "no"
+    s = str(v).strip().lower()
+    if s in ("yes", "true", "1"):
+        return "yes"
+    if s in ("no", "false", "0"):
+        return "no"
+    return s
+
+
 def parse_token_info(raw: Any) -> dict:
     d = unwrap(raw)
     price_obj = d.get("price") or {}
@@ -56,9 +69,9 @@ def parse_token_info(raw: Any) -> dict:
 def parse_token_security(raw: Any) -> dict:
     d = unwrap(raw)
     return {
-        "is_honeypot": d.get("is_honeypot") or None,
-        "open_source": d.get("open_source") or None,
-        "owner_renounced": d.get("owner_renounced") or None,
+        "is_honeypot": _yn(d.get("is_honeypot")),
+        "open_source": _yn(d.get("open_source")),
+        "owner_renounced": _yn(d.get("owner_renounced")),
         "buy_tax": _f(d.get("buy_tax")),
         "sell_tax": _f(d.get("sell_tax")),
         "rug_ratio": _f(d.get("rug_ratio")),

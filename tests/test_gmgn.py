@@ -84,3 +84,23 @@ def test_fetch_snapshot_failure_sets_flag(monkeypatch):
     monkeypatch.setattr(gmgn_mod, "run_gmgn", boom)
     snap = gmgn_mod.fetch_snapshot("gmgn-cli", "sol", "TKN")
     assert snap["gmgn_ok"] is False
+
+
+def test_parse_token_security_normalizes_booleans():
+    sec = parse_token_security({"is_honeypot": True, "open_source": False, "owner_renounced": True})
+    assert sec["is_honeypot"] == "yes"
+    assert sec["open_source"] == "no"
+    assert sec["owner_renounced"] == "yes"
+
+
+def test_parse_token_security_normalizes_string_variants():
+    sec = parse_token_security({"is_honeypot": "TRUE", "open_source": "1", "owner_renounced": "0"})
+    assert sec["is_honeypot"] == "yes"
+    assert sec["open_source"] == "yes"
+    assert sec["owner_renounced"] == "no"
+
+
+def test_parse_token_security_unknown_passthrough():
+    sec = parse_token_security({"open_source": "unknown", "is_honeypot": ""})
+    assert sec["open_source"] == "unknown"
+    assert sec["is_honeypot"] is None
