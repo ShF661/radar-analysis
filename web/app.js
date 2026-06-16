@@ -115,6 +115,7 @@ const S = {
   activeFeature: null,
   sortCol: null,
   sortDir: 'desc',
+  search: '',
 };
 
 // ===== 工具 =====
@@ -256,6 +257,18 @@ function render() {
     ? `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）· 每25秒自动刷新`
     : `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）· 每25秒自动刷新`;
 
+  // 搜索：全库按合约/符号定位单个币（忽略维度与可信过滤）
+  const q = S.search.trim().toLowerCase();
+  if (q) {
+    $('empty').classList.add('hidden');
+    $('sec-buckets').classList.add('hidden');
+    $('sec-features').classList.add('hidden');
+    const list = S.tokens.filter((r) => (r.symbol || '').toLowerCase().includes(q) || (r.address || '').toLowerCase().includes(q));
+    $('tbl-title').innerHTML = `搜索 “${esc(S.search.trim())}”：${list.length} 个 <span class="muted sub">（跨全部数据，忽略可信过滤；点行看详情）</span>`;
+    paintTable(list, null);
+    return;
+  }
+
   // 空态
   if (!ws.length) {
     ['bucket-seg', 'bucket-head', 'features', 'table'].forEach((id) => $(id).innerHTML = '');
@@ -382,6 +395,7 @@ function showDetail(r) {
 // ===== 事件 =====
 $('trust').onchange = (e) => { S.trustOnly = e.target.checked; render(); };
 $('reload').onclick = async () => { await loadAll(); render(); };
+$('search').oninput = (e) => { S.search = e.target.value; render(); };
 $('thr-reset').onclick = () => { S.thresholds = { ...S.defaultThresholds }; renderThresholds(); render(); };
 $('modal-close').onclick = () => $('modal').classList.add('hidden');
 $('modal').onclick = (e) => { if (e.target.id === 'modal') $('modal').classList.add('hidden'); };
