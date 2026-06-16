@@ -115,6 +115,11 @@ class Collector:
                     if not base or base["chain"] not in self.s.chains:
                         continue
                     if self.db.exists(base["task_id"]):
+                        # 评级可能在推送后才由金狗雷达打出；已入库但缺评级的，用同一次轮询数据免费补上
+                        if base.get("grade"):
+                            cur = self.db.get(base["task_id"])
+                            if cur and not cur.get("grade"):
+                                self.db.update_grade(base["task_id"], base["grade"])
                         continue
                     process_new_task(self.db, task, self._snapshot_fn)
                     print(f"[discover] saved {base.get('symbol')} ({base['chain']}) task={base['task_id']}", flush=True)

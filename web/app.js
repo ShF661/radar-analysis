@@ -87,6 +87,7 @@ const labelOf = (k) => S.featureLabels[k] || LOCAL_LABELS[k] || k;
 const COLUMNS = [
   { key: 'symbol', label: '符号', type: 'sym', first: true },
   { key: 'grade', label: '评级', type: 'grade' },
+  { key: 'pushed_at', label: '推送时间', type: 'time' },
   { key: 'peak_gain_pct', label: '最高涨幅', type: 'gain' },
   { key: 'max_drop_pct', label: '最大跌幅', type: 'drop' },
   { key: 'smart_wallets', label: '聪明钱', type: 'int' },
@@ -152,11 +153,19 @@ const fRate = (v) => v == null ? '—' : Math.round(v * 100) + '%';
 const fInt = (v) => v == null ? '—' : Math.round(v).toLocaleString();
 const fTurn = (v) => v == null ? '—' : Number(v).toFixed(2);
 const fUsd = (v) => v == null ? '—' : '$' + Math.round(v).toLocaleString();
+function fmtTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return '—';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 function cellHtml(r, col) {
   const v = r[col.key];
   switch (col.type) {
     case 'sym': return `<span>${esc(v || r.address?.slice(0, 6) || '?')}</span>`;
     case 'grade': return v ? `<span class="grade">${esc(v)}</span>` : '—';
+    case 'time': return fmtTime(v);
     case 'gain': return `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${fGain(v)}</span>`;
     case 'drop': return `<span class="${v > 0 ? 'neg' : ''}">${fDrop(v)}</span>`;
     case 'rate': return fRate(v);
@@ -289,6 +298,7 @@ function render() {
     $('sec-features').classList.add('hidden');
     $('thr-box').classList.add('hidden');
     $('tbl-title').innerHTML = `全部代币（${ws.length} 个）<span class="muted sub"> （点任意行看完整指标；点表头排序）</span>`;
+    if (!S.sortCol) { S.sortCol = 'pushed_at'; S.sortDir = 'desc'; }
     paintTable(ws, null);
     return;
   }

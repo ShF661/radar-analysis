@@ -124,6 +124,13 @@ class Database:
             self._conn.execute(f"UPDATE tokens SET {','.join(sets)} WHERE task_id=?", vals)
             self._conn.commit()
 
+    def update_grade(self, task_id: str, grade: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE tokens SET grade=?, updated_at=? WHERE task_id=?", (grade, _now(), task_id)
+            )
+            self._conn.commit()
+
     def bump_enrich(self, task_id: str) -> None:
         with self._lock:
             self._conn.execute(
