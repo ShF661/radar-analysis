@@ -1,0 +1,29 @@
+{
+  "address": "TKN",
+  "symbol": "TKN",
+  "name": "Token",
+  "circulating_supply": 1000000000,
+  "total_supply": 1000000000,
+  "liquidity": 25000,
+  "holder_count": 320,
+  "creation_timestamp": 1718500000,
+  "price": {
+    "price": "0.0005",
+    "volume_24h": 120000
+  },
+  "stat": {
+    "holder_count": 320,
+    "top_10_holder_rate": 0.42,
+    "dev_team_hold_rate": 0.06,
+    "creator_hold_rate": 0.03,
+    "top_rat_trader_percentage": 0.12,
+    "top_bundler_trader_percentage": 0.35,
+    "top_entrapment_trader_percentage": 0.08,
+    "bot_degen_rate": 0.4,
+    "fresh_wallet_rate": 0.55
+  },
+  "wallet_tags_stat": {
+    "smart_wallets": 0,
+    "renowned_wallets": 0
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "is_honeypot": "no",
+  "open_source": "yes",
+  "owner_renounced": "no",
+  "buy_tax": 0.03,
+  "sell_tax": 0.03,
+  "top_10_holder_rate": 0.42,
+  "dev_team_hold_rate": 0.06,
+  "rug_ratio": 0.12,
+  "rat_trader_amount_rate": 0.12,
+  "bundler_trader_amount_rate": 0.35,
+  "burn_status": ""
+}
