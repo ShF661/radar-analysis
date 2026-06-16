@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>金狗雷达 · GMGN 特征分析</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>金狗雷达 · GMGN 特征分析</h1>
+    <div class="controls">
+      <label>分桶维度
+        <select id="dimension">
+          <option value="peak_gain_pct">最高涨幅</option>
+          <option value="max_drop_pct">最大跌幅</option>
+          <option value="final_gain_pct">最终涨幅</option>
+        </select>
+      </label>
+      <button id="refresh">刷新</button>
+      <span id="status"></span>
+    </div>
+  </header>
+
+  <section id="cohorts"></section>
+
+  <section>
+    <h2>明细（点行看详情）</h2>
+    <div id="table"></div>
+  </section>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <button id="modal-close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
