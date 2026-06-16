@@ -1,0 +1,26 @@
+{
+  "id": "task-123",
+  "token_key": "TKN:solana",
+  "state": "completed",
+  "created_at": "2026-06-16T08:00:00Z",
+  "summary": "a meme about cats",
+  "detailed_narrative": "long narrative text",
+  "input": {
+    "token": {
+      "name": "Token",
+      "symbol": "TKN",
+      "chain": "solana",
+      "address": "TKN",
+      "creation_timestamp": 1718500000,
+      "metrics": {
+        "price": 0.0005,
+        "liquidity": 25000,
+        "volume_24h": 120000,
+        "market_cap": 500000,
+        "holder_count": 320,
+        "top10_position": 0.42
+      }
+    }
+  },
+  "latest_score": { "snapshot_id": "snap-1", "grade": "B", "status": "completed", "hit_status": "pending" }
+}
