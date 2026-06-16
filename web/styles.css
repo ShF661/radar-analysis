@@ -33,7 +33,7 @@ button.ghost:hover { background: #2a3142; }
 .bucket-head { font-size: 15px; font-weight: 600; margin-top: 12px; }
 .bucket-head .meta { color: #8a94a6; font-weight: normal; font-size: 13px; margin-left: 8px; }
 .warn { color: #f7b955; font-size: 13px; margin-top: 6px; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 .filter-tip { background: #1c2230; border: 1px solid #3b5bdb; border-radius: 6px; padding: 6px 10px; font-size: 13px; margin-bottom: 8px; display: inline-flex; gap: 10px; align-items: center; }
 .filter-tip button { background: none; border: none; color: #7aa2ff; cursor: pointer; font-size: 13px; }

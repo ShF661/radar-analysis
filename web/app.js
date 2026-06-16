@@ -88,7 +88,7 @@ const COLUMNS = [
 const S = {
   dimKey: 'peak_high',
   bucketLabel: null,
-  trustOnly: true,
+  trustOnly: false,
   thresholds: {},
   defaultThresholds: {},
   featureLabels: {},
@@ -220,12 +220,23 @@ function render() {
 
   // 维度行 + 分桶
   const dimRows = ws.filter((r) => r[dim.column] != null);
-  if (!S.bucketLabel || !dim.buckets.some((b) => b.label === S.bucketLabel)) S.bucketLabel = dim.defaultBucket;
 
-  // 桶导航（带数量）
+  // 桶计数
   const counts = {};
   for (const b of dim.buckets) counts[b.label] = 0;
   for (const r of dimRows) { const lb = assignBucket(r[dim.column], dim.buckets); if (lb) counts[lb]++; }
+
+  // 默认选桶：优先维度默认桶；若它没数据，则自动选数量最多的非空桶
+  if (!S.bucketLabel || !dim.buckets.some((b) => b.label === S.bucketLabel)) {
+    S.bucketLabel = dim.defaultBucket;
+    if (!counts[S.bucketLabel]) {
+      const best = dim.buckets.map((b) => b.label).filter((l) => counts[l] > 0)
+        .sort((a, b) => counts[b] - counts[a])[0];
+      if (best) S.bucketLabel = best;
+    }
+  }
+
+  // 桶导航（带数量）
   $('bucket-seg').innerHTML = dim.buckets.map((b) =>
     `<button data-b="${esc(b.label)}" class="${b.label === S.bucketLabel ? 'active' : ''}">${esc(b.label)} (${counts[b.label]})</button>`).join('');
   $('bucket-seg').querySelectorAll('button').forEach((btn) =>
