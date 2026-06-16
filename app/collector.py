@@ -50,6 +50,11 @@ def build_entry_row(task: dict, snapshot: dict) -> dict:
     row["base_market_cap"] = row.get("market_cap")
     row["track_status"] = "tracking"
     row["gmgn_ok"] = 1 if snapshot.get("gmgn_ok") else 0
+    # 推送那一刻涨跌幅本就是 0；初始化后新币立刻可在涨跌幅维度可见，之后价格循环更新
+    if row.get("base_market_cap"):
+        row["current_gain_pct"] = 0.0
+        row["peak_gain_pct"] = 0.0
+        row["max_drop_pct"] = 0.0
     return row
 
 
