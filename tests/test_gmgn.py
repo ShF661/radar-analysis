@@ -104,3 +104,9 @@ def test_parse_token_security_unknown_passthrough():
     sec = parse_token_security({"open_source": "unknown", "is_honeypot": ""})
     assert sec["open_source"] == "unknown"
     assert sec["is_honeypot"] is None
+
+
+def test_parse_token_security_sol_authorities():
+    sec = parse_token_security({"renounced_mint": True, "renounced_freeze_account": False})
+    assert sec["renounced_mint"] == "yes"
+    assert sec["renounced_freeze"] == "no"

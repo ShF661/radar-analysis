@@ -61,6 +61,8 @@ const lt = (v, t) => v == null ? null : v < t;
 // 安全风险：只讲“哪里有风险”，无风险不展开
 function securityRisks(r) {
   const out = [];
+  if (r.chain === 'sol' && r.renounced_mint === 'no') out.push('铸币权未放弃（开发者可增发砸盘）');
+  if (r.chain === 'sol' && r.renounced_freeze === 'no') out.push('冻结权未放弃（开发者可冻结你的钱包）');
   if (r.is_honeypot === 'yes') out.push('蜜罐（能买不能卖）');
   if ((r.buy_tax || 0) > 0) out.push('买税 ' + Math.round(r.buy_tax * 100) + '%');
   if ((r.sell_tax || 0) > 0) out.push('卖税 ' + Math.round(r.sell_tax * 100) + '%');
@@ -71,7 +73,7 @@ function securityRisks(r) {
 }
 function securityFlag(r) {
   if (securityRisks(r).length) return true;          // 有风险
-  const hasData = [r.is_honeypot, r.open_source, r.owner_renounced, r.buy_tax, r.sell_tax, r.rug_ratio].some((v) => v != null);
+  const hasData = [r.is_honeypot, r.open_source, r.owner_renounced, r.buy_tax, r.sell_tax, r.rug_ratio, r.renounced_mint, r.renounced_freeze].some((v) => v != null);
   return hasData ? false : null;                     // 有数据但无风险=false；完全无数据=null(不统计)
 }
 const LOCAL_LABELS = { security_risk: '有安全风险' };

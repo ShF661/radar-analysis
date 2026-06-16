@@ -36,7 +36,8 @@ def build_entry_row(task: dict, snapshot: dict) -> dict:
     for k in ("top10_rate", "dev_hold_rate", "rat_rate", "entrapment_rate",
               "bundler_rate", "fresh_wallet_rate", "bot_degen_rate",
               "smart_wallets", "kol_wallets", "is_honeypot", "rug_ratio",
-              "buy_tax", "sell_tax", "open_source", "owner_renounced", "burn_status"):
+              "buy_tax", "sell_tax", "open_source", "owner_renounced", "burn_status",
+              "renounced_mint", "renounced_freeze"):
         row[k] = snapshot.get(k)
     if row.get("top10_rate") is None and base.get("top10_position") is not None:
         row["top10_rate"] = base["top10_position"]
@@ -127,7 +128,7 @@ class Collector:
                     if not row:
                         continue
                     # 自愈：之前没抓到 GMGN 细分指标的，重试补齐
-                    if not row.get("gmgn_ok"):
+                    if not row.get("gmgn_ok") or (row.get("chain") == "sol" and row.get("renounced_mint") is None):
                         snap = self._snapshot_fn(row.get("chain") or "", row.get("address") or "")
                         if snap.get("gmgn_ok"):
                             self.db.update_snapshot(tid, snap)

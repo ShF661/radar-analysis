@@ -12,7 +12,8 @@ COLUMNS = [
     "bundler_rate", "fresh_wallet_rate", "bot_degen_rate", "smart_wallets",
     "kol_wallets", "creation_timestamp", "turnover", "avg_holding_usd",
     "is_honeypot", "rug_ratio", "buy_tax", "sell_tax", "open_source",
-    "owner_renounced", "burn_status", "gmgn_ok", "base_market_cap",
+    "owner_renounced", "burn_status", "renounced_mint", "renounced_freeze",
+    "gmgn_ok", "base_market_cap",
     "current_gain_pct", "peak_gain_pct", "max_drop_pct", "final_gain_pct",
     "peak_market_cap", "min_market_cap", "track_status", "last_priced_at",
     "created_at", "updated_at",
@@ -35,6 +36,11 @@ class Database:
             self._conn.execute(
                 f'CREATE TABLE IF NOT EXISTS tokens ("task_id" TEXT PRIMARY KEY, {cols_sql})'
             )
+            # 字段迁移：为已存在的旧表补上新增列
+            existing = {row[1] for row in self._conn.execute("PRAGMA table_info(tokens)")}
+            for c in COLUMNS:
+                if c not in existing:
+                    self._conn.execute(f'ALTER TABLE tokens ADD COLUMN "{c}"')
             self._conn.commit()
 
     def exists(self, task_id: str) -> bool:
@@ -107,7 +113,7 @@ class Database:
         "top10_rate", "dev_hold_rate", "rat_rate", "entrapment_rate", "bundler_rate",
         "fresh_wallet_rate", "bot_degen_rate", "smart_wallets", "kol_wallets",
         "is_honeypot", "rug_ratio", "buy_tax", "sell_tax", "open_source",
-        "owner_renounced", "burn_status",
+        "owner_renounced", "burn_status", "renounced_mint", "renounced_freeze",
     ]
 
     def update_snapshot(self, task_id: str, snap: dict) -> None:

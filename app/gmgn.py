@@ -77,6 +77,8 @@ def parse_token_security(raw: Any) -> dict:
         "sell_tax": _f(d.get("sell_tax")),
         "rug_ratio": _f(d.get("rug_ratio")),
         "burn_status": d.get("burn_status", None),
+        "renounced_mint": _yn(d.get("renounced_mint")),
+        "renounced_freeze": _yn(d.get("renounced_freeze_account")),
     }
 
 
