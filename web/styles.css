@@ -89,3 +89,14 @@ tbody tr:hover td.first { background: #1f2535; }
 .title-right { display: flex; gap: 10px; align-items: center; }
 .search { background: #11141c; color: #e6e6e6; border: 1px solid #2a3040; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 240px; }
 .search:focus { outline: none; border-color: #3b5bdb; }
+
+.symcell { line-height: 1.25; }
+.symname { font-weight: 600; }
+.symaddr { font-size: 11px; color: #6b7384; display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+.symaddr .addr { cursor: pointer; }
+.symaddr .ico { cursor: pointer; text-decoration: none; color: #7aa2ff; }
+.symaddr .ico:hover { color: #fff; }
+.gmgn-btn { font-size: 12px; background: #222634; color: #7aa2ff; border: 1px solid #333a4a; border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 8px; white-space: nowrap; }
+.gmgn-btn:hover { color: #fff; border-color: #3b5bdb; }
+.addr-copy { cursor: pointer; color: #7aa2ff; word-break: break-all; }
+.addr-copy:hover { color: #fff; }

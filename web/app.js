@@ -87,7 +87,7 @@ const labelOf = (k) => S.featureLabels[k] || LOCAL_LABELS[k] || k;
 const COLUMNS = [
   { key: 'symbol', label: '符号', type: 'sym', first: true },
   { key: 'grade', label: '评级', type: 'grade' },
-  { key: 'pushed_at', label: '推送时间', type: 'time' },
+  { key: 'base_market_cap', label: '市值 推荐→最高', type: 'mcap' },
   { key: 'peak_gain_pct', label: '最高涨幅', type: 'gain' },
   { key: 'max_drop_pct', label: '最大跌幅', type: 'drop' },
   { key: 'smart_wallets', label: '聪明钱', type: 'int' },
@@ -101,7 +101,7 @@ const COLUMNS = [
   { key: 'avg_holding_usd', label: '人均持币', type: 'usd' },
   { key: 'top10_rate', label: 'TOP10%', type: 'rate' },
   { key: 'dev_hold_rate', label: 'DEV%', type: 'rate' },
-  { key: '_delay', label: '采集', type: 'delay' },
+  { key: 'pushed_at', label: '推荐时间', type: 'time' },
 ];
 
 // ===== 状态 =====
@@ -160,11 +160,42 @@ function fmtTime(v) {
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+function fAbbr(v) {
+  if (v == null) return '—';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
+  return '$' + Math.round(v);
+}
+function gmgnUrl(r) {
+  return (r.address && r.chain) ? `https://gmgn.ai/${r.chain}/token/${r.address}` : '';
+}
+function symCell(r) {
+  const addr = r.address || '';
+  const short = addr ? addr.slice(0, 4) + '…' + addr.slice(-4) : '?';
+  const url = gmgnUrl(r);
+  return `<div class="symcell">
+    <div class="symname">${esc(r.symbol || short)}</div>
+    <div class="symaddr">
+      <span class="addr" data-copy="${esc(addr)}" title="点击复制合约">${esc(short)}</span>
+      <span class="ico" data-copy="${esc(addr)}" title="复制合约">📋</span>
+      ${url ? `<a class="ico" href="${esc(url)}" target="_blank" rel="noopener" title="在GMGN看K线">↗</a>` : ''}
+    </div>
+  </div>`;
+}
+function fallbackCopy(text, done) {
+  try { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (e) {}
+}
+function copyText(text, el) {
+  const done = () => { if (!el) return; const o = el.textContent; el.textContent = '已复制✓'; setTimeout(() => { el.textContent = o; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
 function cellHtml(r, col) {
   const v = r[col.key];
   switch (col.type) {
-    case 'sym': return `<span>${esc(v || r.address?.slice(0, 6) || '?')}</span>`;
+    case 'sym': return symCell(r);
     case 'grade': return v ? `<span class="grade">${esc(v)}</span>` : '—';
+    case 'mcap': return `${fAbbr(r.base_market_cap)} → ${fAbbr(r.peak_market_cap)}`;
     case 'time': return fmtTime(v);
     case 'gain': return `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${fGain(v)}</span>`;
     case 'drop': return `<span class="${v > 0 ? 'neg' : ''}">${fDrop(v)}</span>`;
@@ -252,8 +283,14 @@ function paintTable(rows, feats) {
       else { S.sortCol = c; S.sortDir = 'desc'; }
       render();
     });
-  $('table').querySelectorAll('tbody tr').forEach((tr) =>
-    tr.onclick = () => showDetail(list[+tr.dataset.i]));
+  const tbody = $('table').querySelector('tbody');
+  if (tbody) tbody.onclick = (e) => {
+    const copyEl = e.target.closest('[data-copy]');
+    if (copyEl) { e.stopPropagation(); copyText(copyEl.dataset.copy, copyEl); return; }
+    if (e.target.closest('a')) return; // GMGN 链接，默认新标签打开
+    const tr = e.target.closest('tr');
+    if (tr && tr.dataset.i != null) showDetail(list[+tr.dataset.i]);
+  };
 }
 
 // ===== 渲染 =====
@@ -372,12 +409,15 @@ function showDetail(r) {
   const d = delayMin(r);
   const rowsHtml = (pairs) => pairs.map(([k, v]) => `<div class="k">${esc(k)}</div><div>${v == null || v === '' ? '—' : v}</div>`).join('');
   const created = r.creation_timestamp ? new Date(r.creation_timestamp * 1000).toLocaleString() : '—';
+  const addr = r.address || '';
+  const url = gmgnUrl(r);
+  const contractHtml = addr ? `<span class="addr-copy" data-copy="${esc(addr)}" title="点击复制">${esc(addr)} 📋</span>` : '—';
   $('modal-body').innerHTML =
-    `<h2>${esc(r.symbol || '?')} <span class="muted">${esc(r.name || '')}</span></h2>
+    `<h2>${esc(r.symbol || '?')} <span class="muted">${esc(r.name || '')}</span>${url ? ` <a class="gmgn-btn" href="${esc(url)}" target="_blank" rel="noopener">在 GMGN 看K线 ↗</a>` : ''}</h2>
      <div class="kv">
        <div class="sec">基本信息</div>
        ${rowsHtml([
-        ['链', r.chain], ['评级', r.grade], ['合约', r.address], ['推送时间', r.pushed_at],
+        ['链', r.chain], ['评级', r.grade], ['合约', contractHtml], ['推荐时间', fmtTime(r.pushed_at)],
         ['部署时间', created], ['采集延迟', d == null ? '—' : fmtDelay(d) + (d <= TRUST_MAX_DELAY_MIN ? '（可信✓）' : '（存量/迟采，指标仅参考）')],
         ['叙事', r.narrative],
       ])}
@@ -397,11 +437,13 @@ function showDetail(r) {
             : `<div class="k"></div><div style="color:#4ade80">无明显风险</div>`; })()}
        <div class="sec">推送后表现</div>
        ${rowsHtml([
+        ['推荐市值', fUsd(r.base_market_cap)], ['推荐后最高市值', fUsd(r.peak_market_cap)],
         ['最高涨幅', fGain(r.peak_gain_pct)], ['最大跌幅', fDrop(r.max_drop_pct)],
         ['当前涨幅', fGain(r.current_gain_pct)], ['最终涨幅', fGain(r.final_gain_pct)],
         ['追踪状态', r.track_status],
       ])}
      </div>`;
+  $('modal-body').querySelectorAll('[data-copy]').forEach((el) => el.onclick = () => copyText(el.dataset.copy, el));
   $('modal').classList.remove('hidden');
 }
 
