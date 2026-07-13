@@ -1,9 +1,12 @@
+"""PostgreSQL version of Database — drop-in replacement for db.py when DATABASE_URL is set."""
 from __future__ import annotations
 
-import sqlite3
 import threading
 from datetime import datetime, timezone
 from typing import Optional
+
+import psycopg2
+import psycopg2.extras
 
 COLUMNS = [
     "task_id", "token_key", "address", "chain", "symbol", "name", "pushed_at",
@@ -19,9 +22,28 @@ COLUMNS = [
     "created_at", "updated_at", "enrich_attempts",
     "backtest_id", "backtest_status", "settlement_market_cap",
     "settlement_gain_pct",
-    # signal filter
     "filter_type", "matched_rules", "can_not_sell", "is_blacklist",
 ]
+
+# Types for CREATE TABLE; ALTER TABLE ADD COLUMN defaults to TEXT
+_COL_TYPE: dict[str, str] = {
+    "price": "DOUBLE PRECISION", "liquidity": "DOUBLE PRECISION",
+    "market_cap": "DOUBLE PRECISION", "volume_24h": "DOUBLE PRECISION",
+    "holder_count": "INTEGER", "top10_rate": "DOUBLE PRECISION",
+    "dev_hold_rate": "DOUBLE PRECISION", "rat_rate": "DOUBLE PRECISION",
+    "entrapment_rate": "DOUBLE PRECISION", "bundler_rate": "DOUBLE PRECISION",
+    "fresh_wallet_rate": "DOUBLE PRECISION", "bot_degen_rate": "DOUBLE PRECISION",
+    "smart_wallets": "INTEGER", "kol_wallets": "INTEGER",
+    "turnover": "DOUBLE PRECISION", "avg_holding_usd": "DOUBLE PRECISION",
+    "rug_ratio": "DOUBLE PRECISION", "buy_tax": "DOUBLE PRECISION",
+    "sell_tax": "DOUBLE PRECISION", "gmgn_ok": "INTEGER",
+    "base_market_cap": "DOUBLE PRECISION", "current_gain_pct": "DOUBLE PRECISION",
+    "peak_gain_pct": "DOUBLE PRECISION", "max_drop_pct": "DOUBLE PRECISION",
+    "final_gain_pct": "DOUBLE PRECISION", "peak_market_cap": "DOUBLE PRECISION",
+    "min_market_cap": "DOUBLE PRECISION", "enrich_attempts": "INTEGER",
+    "settlement_market_cap": "DOUBLE PRECISION", "settlement_gain_pct": "DOUBLE PRECISION",
+    "can_not_sell": "INTEGER",
+}
 
 
 def _now() -> str:
@@ -29,64 +51,101 @@ def _now() -> str:
 
 
 class Database:
-    def __init__(self, path: str):
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+    def __init__(self, url: str):
+        self._url = url
+        self._conn = self._connect()
         self._lock = threading.RLock()
 
+    def _connect(self):
+        conn = psycopg2.connect(self._url)
+        conn.autocommit = False
+        return conn
+
+    def _cur(self) -> psycopg2.extras.RealDictCursor:
+        try:
+            if self._conn.closed:
+                raise psycopg2.OperationalError("closed")
+        except Exception:
+            self._conn = self._connect()
+        return self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    def _exec(self, sql: str, params=None):
+        try:
+            cur = self._cur()
+            cur.execute(sql, params)
+            return cur
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            self._conn = self._connect()
+            cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(sql, params)
+            return cur
+
     def init_schema(self) -> None:
-        cols_sql = ",\n".join(f'"{c}"' for c in COLUMNS if c != "task_id")
+        non_pk = [c for c in COLUMNS if c != "task_id"]
+        col_defs = ",\n".join(
+            f'"{c}" {_COL_TYPE.get(c, "TEXT")}' for c in non_pk
+        )
         with self._lock:
-            self._conn.execute(
-                f'CREATE TABLE IF NOT EXISTS tokens ("task_id" TEXT PRIMARY KEY, {cols_sql})'
-            )
-            # 字段迁移：为已存在的旧表补上新增列
-            existing = {row[1] for row in self._conn.execute("PRAGMA table_info(tokens)")}
+            self._exec(f'''
+                CREATE TABLE IF NOT EXISTS tokens (
+                    "task_id" TEXT PRIMARY KEY,
+                    {col_defs}
+                )
+            ''')
+            cur = self._exec("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name='tokens' AND table_schema='public'
+            """)
+            existing = {row["column_name"] for row in cur.fetchall()}
             for c in COLUMNS:
                 if c not in existing:
-                    self._conn.execute(f'ALTER TABLE tokens ADD COLUMN "{c}"')
+                    t = _COL_TYPE.get(c, "TEXT")
+                    self._exec(f'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "{c}" {t}')
             self._conn.commit()
 
     def exists(self, task_id: str) -> bool:
         with self._lock:
-            cur = self._conn.execute("SELECT 1 FROM tokens WHERE task_id=?", (task_id,))
+            cur = self._exec("SELECT 1 FROM tokens WHERE task_id=%s", (task_id,))
             return cur.fetchone() is not None
 
     def insert_entry(self, row: dict) -> None:
         data = {c: row.get(c) for c in COLUMNS}
-        data["task_id"] = row["task_id"]
         data["created_at"] = _now()
         data["updated_at"] = _now()
-        cols = ",".join(f'"{c}"' for c in COLUMNS)
-        ph = ",".join("?" for _ in COLUMNS)
+        cols = ", ".join(f'"{c}"' for c in COLUMNS)
+        vals = ", ".join("%s" for _ in COLUMNS)
+        update_set = ", ".join(
+            f'"{c}" = EXCLUDED."{c}"' for c in COLUMNS if c != "task_id"
+        )
         with self._lock:
-            self._conn.execute(
-                f"INSERT OR REPLACE INTO tokens ({cols}) VALUES ({ph})",
+            self._exec(
+                f'INSERT INTO tokens ({cols}) VALUES ({vals}) '
+                f'ON CONFLICT (task_id) DO UPDATE SET {update_set}',
                 [data[c] for c in COLUMNS],
             )
             self._conn.commit()
 
     def get(self, task_id: str) -> Optional[dict]:
         with self._lock:
-            cur = self._conn.execute("SELECT * FROM tokens WHERE task_id=?", (task_id,))
+            cur = self._exec("SELECT * FROM tokens WHERE task_id=%s", (task_id,))
             r = cur.fetchone()
             return dict(r) if r else None
 
     def all(self) -> list[dict]:
         with self._lock:
-            cur = self._conn.execute("SELECT * FROM tokens ORDER BY pushed_at DESC")
+            cur = self._exec("SELECT * FROM tokens ORDER BY pushed_at DESC")
             return [dict(r) for r in cur.fetchall()]
 
     def all_backtested(self) -> list[dict]:
         with self._lock:
-            cur = self._conn.execute(
+            cur = self._exec(
                 "SELECT * FROM tokens WHERE backtest_id IS NOT NULL ORDER BY pushed_at DESC"
             )
             return [dict(r) for r in cur.fetchall()]
 
     def tracking_ids(self) -> list[str]:
         with self._lock:
-            cur = self._conn.execute("SELECT task_id FROM tokens WHERE track_status='tracking'")
+            cur = self._exec("SELECT task_id FROM tokens WHERE track_status='tracking'")
             return [r["task_id"] for r in cur.fetchall()]
 
     def update_price(self, task_id: str, current_market_cap: float) -> None:
@@ -104,9 +163,10 @@ class Database:
             min_mc = min(current_market_cap, row.get("min_market_cap") or current_market_cap)
             peak_gain = round((peak_mc / base - 1) * 100, 10)
             drop = round(max(0.0, (1 - min_mc / base) * 100), 10)
-            self._conn.execute(
-                """UPDATE tokens SET current_gain_pct=?, peak_gain_pct=?, max_drop_pct=?,
-                   peak_market_cap=?, min_market_cap=?, last_priced_at=?, updated_at=? WHERE task_id=?""",
+            self._exec(
+                """UPDATE tokens SET current_gain_pct=%s, peak_gain_pct=%s, max_drop_pct=%s,
+                   peak_market_cap=%s, min_market_cap=%s, last_priced_at=%s, updated_at=%s
+                   WHERE task_id=%s""",
                 (gain, peak_gain, drop, peak_mc, min_mc, _now(), _now(), task_id),
             )
             self._conn.commit()
@@ -141,9 +201,9 @@ class Database:
             if not clean:
                 return
             clean["updated_at"] = _now()
-            sets = ",".join(f'"{k}"=?' for k in clean)
+            sets = ", ".join(f'"{k}"=%s' for k in clean)
             vals = list(clean.values()) + [task_id]
-            self._conn.execute(f"UPDATE tokens SET {sets} WHERE task_id=?", vals)
+            self._exec(f"UPDATE tokens SET {sets} WHERE task_id=%s", vals)
             self._conn.commit()
 
     def finalize(self, task_id: str) -> None:
@@ -151,8 +211,8 @@ class Database:
             row = self.get(task_id)
             if not row:
                 return
-            self._conn.execute(
-                "UPDATE tokens SET final_gain_pct=?, track_status='done', updated_at=? WHERE task_id=?",
+            self._exec(
+                "UPDATE tokens SET final_gain_pct=%s, track_status='done', updated_at=%s WHERE task_id=%s",
                 (row.get("current_gain_pct"), _now(), task_id),
             )
             self._conn.commit()
@@ -166,37 +226,36 @@ class Database:
     ]
 
     def update_snapshot(self, task_id: str, snap: dict) -> None:
-        """补齐之前没抓到的 GMGN 细分指标；不触碰价格追踪与推送时字段。"""
         with self._lock:
-            sets = [f'"{k}"=?' for k in self.GMGN_FIELDS] + ['"gmgn_ok"=?', '"updated_at"=?']
+            sets = [f'"{k}"=%s' for k in self.GMGN_FIELDS] + ['"gmgn_ok"=%s', '"updated_at"=%s']
             vals = [snap.get(k) for k in self.GMGN_FIELDS] + [1 if snap.get("gmgn_ok") else 0, _now(), task_id]
-            self._conn.execute(f"UPDATE tokens SET {','.join(sets)} WHERE task_id=?", vals)
+            self._exec(f"UPDATE tokens SET {','.join(sets)} WHERE task_id=%s", vals)
             self._conn.commit()
 
     def update_grade(self, task_id: str, grade: str) -> None:
         with self._lock:
-            self._conn.execute(
-                "UPDATE tokens SET grade=?, updated_at=? WHERE task_id=?", (grade, _now(), task_id)
+            self._exec(
+                "UPDATE tokens SET grade=%s, updated_at=%s WHERE task_id=%s",
+                (grade, _now(), task_id),
             )
             self._conn.commit()
 
     def bump_enrich(self, task_id: str) -> None:
         with self._lock:
-            self._conn.execute(
-                "UPDATE tokens SET enrich_attempts = COALESCE(enrich_attempts, 0) + 1 WHERE task_id=?",
+            self._exec(
+                "UPDATE tokens SET enrich_attempts = COALESCE(enrich_attempts, 0) + 1 WHERE task_id=%s",
                 (task_id,),
             )
             self._conn.commit()
 
     def mark_filtered(self, task_id: str, filter_type: str, matched_rules: list[str], snap: dict) -> None:
-        """Write filter outcome fields onto an existing row (called right after insert_entry)."""
         import json
         with self._lock:
-            self._conn.execute(
+            self._exec(
                 """UPDATE tokens
-                   SET filter_type=?, matched_rules=?, gmgn_ok=?,
-                       track_status='done', updated_at=?
-                   WHERE task_id=?""",
+                   SET filter_type=%s, matched_rules=%s, gmgn_ok=%s,
+                       track_status='done', updated_at=%s
+                   WHERE task_id=%s""",
                 (
                     filter_type,
                     json.dumps(matched_rules, ensure_ascii=False),
@@ -210,24 +269,23 @@ class Database:
     def get_filtered(self, limit: int = 50, chain: str | None = None) -> list[dict]:
         with self._lock:
             if chain:
-                cur = self._conn.execute(
-                    "SELECT * FROM tokens WHERE filter_type IS NOT NULL AND chain=?"
-                    " ORDER BY pushed_at DESC LIMIT ?",
+                cur = self._exec(
+                    "SELECT * FROM tokens WHERE filter_type IS NOT NULL AND chain=%s"
+                    " ORDER BY pushed_at DESC LIMIT %s",
                     (chain, limit),
                 )
             else:
-                cur = self._conn.execute(
+                cur = self._exec(
                     "SELECT * FROM tokens WHERE filter_type IS NOT NULL"
-                    " ORDER BY pushed_at DESC LIMIT ?",
+                    " ORDER BY pushed_at DESC LIMIT %s",
                     (limit,),
                 )
             return [dict(r) for r in cur.fetchall()]
 
     def clear_filter(self, task_id: str) -> None:
-        """Remove filter mark so the task can re-enter processing (rescue)."""
         with self._lock:
-            self._conn.execute(
-                "UPDATE tokens SET filter_type=NULL, matched_rules=NULL, track_status='tracking', updated_at=? WHERE task_id=?",
+            self._exec(
+                "UPDATE tokens SET filter_type=NULL, matched_rules=NULL, track_status='tracking', updated_at=%s WHERE task_id=%s",
                 (_now(), task_id),
             )
             self._conn.commit()

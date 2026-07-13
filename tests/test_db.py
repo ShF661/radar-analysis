@@ -23,6 +23,47 @@ def test_update_price_sets_gain_and_drop(tmp_path):
     assert row["max_drop_pct"] == 60.0
 
 
+def test_update_price_skips_backtest_controlled_rows(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.init_schema()
+    db.insert_entry({"task_id": "t", "base_market_cap": 100.0, "track_status": "tracking",
+                     "backtest_id": "bt-1", "peak_market_cap": 180.0,
+                     "peak_gain_pct": 80.0, "max_drop_pct": 20.0})
+    db.update_price("t", current_market_cap=250.0)
+    row = db.get("t")
+    assert row["peak_market_cap"] == 180.0
+    assert row["peak_gain_pct"] == 80.0
+    assert row["max_drop_pct"] == 20.0
+
+
+def test_apply_backtest_metrics_updates_performance_only(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.init_schema()
+    db.insert_entry({"task_id": "t", "base_market_cap": 100.0, "track_status": "tracking",
+                     "smart_wallets": 3, "kol_wallets": 1})
+    db.apply_backtest_metrics("t", {
+        "backtest_id": "bt-1",
+        "base_market_cap": 120.0,
+        "peak_market_cap": 240.0,
+        "peak_gain_pct": 100.0,
+        "max_drop_pct": 30.0,
+        "settlement_market_cap": 60.0,
+        "settlement_gain_pct": -50.0,
+        "status": "settled",
+    })
+    row = db.get("t")
+    assert row["backtest_id"] == "bt-1"
+    assert row["base_market_cap"] == 120.0
+    assert row["peak_market_cap"] == 240.0
+    assert row["peak_gain_pct"] == 100.0
+    assert row["max_drop_pct"] == 30.0
+    assert row["settlement_market_cap"] == 60.0
+    assert row["final_gain_pct"] == -50.0
+    assert row["track_status"] == "done"
+    assert row["smart_wallets"] == 3
+    assert row["kol_wallets"] == 1
+
+
 def test_finalize_marks_done(tmp_path):
     db = Database(str(tmp_path / "t.db"))
     db.init_schema()

@@ -311,15 +311,16 @@ function render() {
     ? `基于 ${trustCount} 个可信样本（共 ${total} 条，已排除 ${total - trustCount} 条迟采/存量）· 每25秒自动刷新`
     : `显示全部 ${total} 条（含存量/迟采，仅供体验界面，入场指标无参考价值）· 每25秒自动刷新`;
 
-  // 搜索：全库按合约/符号定位单个币（忽略维度与可信过滤）
+  // 搜索：按合约/符号定位单个币（忽略维度，但遵循“只看可信样本”勾选）
   const q = S.search.trim().toLowerCase();
   if (q) {
     $('empty').classList.add('hidden');
     $('sec-buckets').classList.add('hidden');
     $('sec-features').classList.add('hidden');
     $('thr-box').classList.add('hidden');
-    const list = S.tokens.filter((r) => (r.symbol || '').toLowerCase().includes(q) || (r.address || '').toLowerCase().includes(q));
-    $('tbl-title').innerHTML = `搜索 “${esc(S.search.trim())}”：${list.length} 个 <span class="muted sub">（跨全部数据，忽略可信过滤；点行看详情）</span>`;
+    const list = ws.filter((r) => (r.symbol || '').toLowerCase().includes(q) || (r.address || '').toLowerCase().includes(q));
+    const scopeNote = S.trustOnly ? '仅在可信样本中（延迟&lt;5分）' : '跨全部数据';
+    $('tbl-title').innerHTML = `搜索 “${esc(S.search.trim())}”：${list.length} 个 <span class="muted sub">（${scopeNote}；点行看详情）</span>`;
     paintTable(list, null);
     return;
   }
@@ -337,19 +338,41 @@ function render() {
   }
   $('empty').classList.add('hidden');
 
-  // 「全部」：不分桶，平铺所有币
+  // 「全部」：不分桶，平铺所有币 + 全样本特征占比概览
   if (S.dimKey === 'all') {
     $('sec-buckets').classList.add('hidden');
-    $('sec-features').classList.add('hidden');
-    $('thr-box').classList.add('hidden');
-    $('tbl-title').innerHTML = `全部代币（${ws.length} 个）<span class="muted sub"> （点任意行看完整指标；点表头排序）</span>`;
+    $('sec-features').classList.remove('hidden');
+    $('thr-box').classList.remove('hidden');
+
+    // 全样本特征派生
+    const feats = {};
+    for (const r of ws) feats[r.task_id] = deriveFeatures(r);
+
+    // A. 全样本特征占比（无桶、无基准/lift，按占比从高到低）
+    $('feat-title').innerHTML = `A · 全部样本的特征占比<span class="muted sub"> （占比从高到低；点一行可在下方只看命中该特征的币）</span>`;
+    const stats = FEATURE_DEFS.map((f) => ({ key: f.key, label: labelOf(f.key), ...rate(ws, f.key, feats) }))
+      .filter((s) => s.rate != null).sort((a, b) => b.rate - a.rate);
+    $('features').innerHTML = stats.map((s) => {
+      const sel = s.key === S.activeFeature ? ' sel' : '';
+      return `<div class="feat flat${sel}" data-f="${s.key}">
+        <span class="fname">${esc(s.label)}</span>
+        <span class="bar"><span class="val" style="width:${s.rate * 100}%"></span></span>
+        <span class="nums">${Math.round(s.rate * 100)}% (${s.hits}/${s.n})</span>
+      </div>`;
+    }).join('');
+    $('features').querySelectorAll('.feat').forEach((el) =>
+      el.onclick = () => { S.activeFeature = (S.activeFeature === el.dataset.f) ? null : el.dataset.f; render(); });
+
+    // B. 全部代币明细
+    $('tbl-title').innerHTML = `B · 全部代币明细（${ws.length} 个）<span class="muted sub"> （点任意行看完整指标；点表头排序）</span>`;
     if (!S.sortCol) { S.sortCol = 'pushed_at'; S.sortDir = 'desc'; }
-    paintTable(ws, null);
+    paintTable(ws, feats);
     return;
   }
   $('sec-buckets').classList.remove('hidden');
   $('sec-features').classList.remove('hidden');
   $('thr-box').classList.remove('hidden');
+  $('feat-title').innerHTML = `A · 这组的共同特征<span class="muted sub"> （绿=高于大盘=共同特征；灰=不高于。点一行可在下方只看命中该特征的币）</span>`;
   $('tbl-title').innerHTML = `B · 这组的代币明细<span class="muted sub"> （点任意行看该币完整指标；点表头排序）</span>`;
 
   const dim = DIMS[S.dimKey];
@@ -431,6 +454,7 @@ function showDetail(r) {
       ])}
        <div class="sec">入场指标（推送时）</div>
        ${rowsHtml([
+        ['采集时间', fmtTime(r.created_at) + (r.enrich_attempts ? '　⚠️ 详细指标二次采集（可能非推送瞬间）' : '')],
         ['市值', fUsd(r.market_cap)], ['流动性', fUsd(r.liquidity)], ['24h成交量', fUsd(r.volume_24h)],
         ['持有人', fInt(r.holder_count)], ['换手率', fTurn(r.turnover)], ['人均持币', fUsd(r.avg_holding_usd)],
         ['TOP10持仓', fRate(r.top10_rate)], ['DEV持仓', fRate(r.dev_hold_rate)],
@@ -439,10 +463,18 @@ function showDetail(r) {
         ['老鼠仓', fRate(r.rat_rate)], ['钓鱼钱包', fRate(r.entrapment_rate)], ['机器人占比', fRate(r.bot_degen_rate)],
       ])}
        <div class="sec">安全风险</div>
-       ${(() => { const risks = securityRisks(r);
-          return risks.length
-            ? risks.map((x) => `<div class="k">⚠️</div><div style="color:#ff6b6b">${esc(x)}</div>`).join('')
-            : `<div class="k"></div><div style="color:#4ade80">无明显风险</div>`; })()}
+       ${(() => {
+          const risks = securityRisks(r);
+          const out = risks.map((x) => `<div class="k">⚠️</div><div style="color:#ff6b6b">${esc(x)}</div>`);
+          // SOL 链：始终显示买/卖税，便于核对数据（0 税为正常，绿色；非 0 红色提示）
+          if (r.chain === 'sol') {
+            const pct = (v) => v == null ? '—' : Math.round(v * 100) + '%';
+            const clean = (r.buy_tax || 0) === 0 && (r.sell_tax || 0) === 0;
+            out.push(`<div class="k">买/卖税</div><div style="color:${clean ? '#4ade80' : '#ff6b6b'}">买 ${pct(r.buy_tax)} · 卖 ${pct(r.sell_tax)}</div>`);
+          }
+          if (!risks.length && r.chain !== 'sol') out.push(`<div class="k"></div><div style="color:#4ade80">无明显风险</div>`);
+          return out.join('') || `<div class="k"></div><div style="color:#4ade80">无明显风险</div>`;
+       })()}
        <div class="sec">推送后表现</div>
        ${rowsHtml([
         ['推荐市值', fUsd(r.base_market_cap)], ['推荐后最高市值', fUsd(r.peak_market_cap)],

@@ -1,6 +1,9 @@
 * { box-sizing: border-box; }
-body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; }
-header { padding: 14px 24px; background: #161922; position: sticky; top: 0; z-index: 20; border-bottom: 1px solid #232838; }
+html, body { height: 100%; }
+body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+header { padding: 14px 24px; background: #161922; border-bottom: 1px solid #232838; flex: 0 0 auto; }
+/* 唯一的上下/左右滚动区：特征占比(A区)随之滚走，表头 sticky 在此区顶部固定（紧贴 header 下方） */
+.scroll { flex: 1 1 auto; overflow: auto; }
 .title-row { display: flex; align-items: center; justify-content: space-between; }
 h1 { font-size: 17px; margin: 0; }
 h2 { font-size: 15px; margin: 18px 0 8px; }
@@ -55,11 +58,15 @@ button.ghost:hover { background: #2a3142; }
 .feat.up .lift { color: #4ade80; }
 .feat.down .lift { color: #8a94a6; }
 
+/* 全部维度：全样本占比概览，中性蓝色条（无绿/灰=高于大盘语义） */
+.feat.flat .fname { color: #c9d2e0; }
+.feat.flat .bar > .val { background: #3b5bdb; }
+
 /* table */
-.table-wrap { overflow-x: auto; border: 1px solid #232838; border-radius: 8px; }
+.table-wrap { overflow: visible; border: 1px solid #232838; border-radius: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
 th, td { padding: 7px 10px; border-bottom: 1px solid #1e2430; text-align: right; }
-th { position: sticky; top: 0; background: #1a1f2b; cursor: pointer; user-select: none; color: #aeb6c4; }
+th { position: sticky; top: 0; z-index: 1; background: #1a1f2b; cursor: pointer; user-select: none; color: #aeb6c4; }
 th:hover { color: #fff; }
 th.first, td.first { text-align: left; position: sticky; left: 0; background: #161922; z-index: 2; }
 th.first { z-index: 3; background: #1a1f2b; }

@@ -4,10 +4,19 @@ from typing import Optional
 
 import httpx
 
+from app.backtest import backtest_date_window, normalize_backtest_token, same_token
 from app.gmgn import normalize_chain
 
 
-def parse_task(task: dict) -> Optional[dict]:
+def _hit_to_int(v) -> int | None:
+    if v == "hit":
+        return 1
+    if v == "miss":
+        return 0
+    return None  # "pending" or None → not yet determined
+
+
+def parse_task(task: dict) -> dict | None:
     """把金狗雷达 task 转成入场行的金狗雷达部分；缺 token 返回 None。"""
     token = (task.get("input") or {}).get("token")
     if not token or not token.get("address"):
@@ -24,6 +33,7 @@ def parse_task(task: dict) -> Optional[dict]:
         "pushed_at": task.get("created_at"),
         "grade": score.get("grade"),
         "narrative": task.get("detailed_narrative") or task.get("summary"),
+        "narrative_hit": _hit_to_int(score.get("hit_status")),
         "price": metrics.get("price"),
         "liquidity": metrics.get("liquidity"),
         "volume_24h": metrics.get("volume_24h"),
@@ -81,6 +91,84 @@ class RadarClient:
             "sort_order": "desc",
         })
         return r.json().get("data", [])
+
+    def fetch_filtered_tasks(self, page_size: int = 100) -> list[dict]:
+        """Fetch tasks pre-filtered by the radar backend (metric_filtered / safety_filtered)."""
+        out: list[dict] = []
+        for state in ("metric_filtered", "safety_filtered"):
+            try:
+                r = self._get("/api/v1/tasks", {
+                    "state": state,
+                    "page": 1,
+                    "page_size": page_size,
+                    "sort_by": "created_at",
+                    "sort_order": "desc",
+                })
+                out.extend(r.json().get("data", []))
+            except Exception as e:
+                print(f"[radar] fetch_filtered_tasks state={state} error: {e}", flush=True)
+        return out
+
+    def get_task(self, task_id: str) -> Optional[dict]:
+        """Fetch a single task by ID. Returns None on 404 or error."""
+        try:
+            r = self._get(f"/api/v1/tasks/{task_id}", {})
+            body = r.json()
+            return body.get("data") or body if isinstance(body, dict) else None
+        except Exception:
+            return None
+
+    def fetch_backtest_tokens(
+        self,
+        start_date: str,
+        end_date: str,
+        page_size: int = 100,
+        max_pages: int = 100,
+        sort_by: str = "first_push_at",
+        sort_order: str = "asc",
+        search: str | None = None,
+    ) -> list[dict]:
+        out: list[dict] = []
+        page = 1
+        total: int | None = None
+        while page <= max_pages:
+            r = self._get("/api/v1/backtests/tokens", {
+                "start_date": start_date,
+                "end_date": end_date,
+                "page": page,
+                "page_size": page_size,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "search": search,
+            })
+            body = r.json()
+            items = body.get("data") or body.get("items") or body.get("tokens") or []
+            pagination = body.get("pagination") or {}
+            if total is None:
+                total = pagination.get("total") or body.get("total")
+            out.extend(items)
+            eff_page_size = pagination.get("page_size") or page_size
+            if not items:
+                break
+            if total is not None and len(out) >= total:
+                break
+            if len(items) < eff_page_size:
+                break
+            page += 1
+        return out
+
+    def find_backtest_token(self, address: str, chain: str, pushed_at: str | None = None) -> Optional[dict]:
+        start_date, end_date = backtest_date_window(pushed_at)
+        for raw in self.fetch_backtest_tokens(
+            start_date=start_date,
+            end_date=end_date,
+            search=address,
+            max_pages=5,
+        ):
+            bt = normalize_backtest_token(raw)
+            if same_token(bt, address, chain):
+                return bt
+        return None
 
     def close(self) -> None:
         self._http.close()

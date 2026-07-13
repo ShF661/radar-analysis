@@ -7,7 +7,8 @@ from app.db import Database
 def _seed(db):
     db.insert_entry({"task_id": "low", "symbol": "L", "address": "a", "chain": "sol",
                      "peak_gain_pct": 10, "max_drop_pct": 70, "smart_wallets": 0,
-                     "base_market_cap": 100, "track_status": "done"})
+                     "base_market_cap": 100, "track_status": "done",
+                     "backtest_id": "bt-low"})
     db.insert_entry({"task_id": "hi", "symbol": "H", "address": "b", "chain": "sol",
                      "peak_gain_pct": 200, "max_drop_pct": 10, "smart_wallets": 3,
                      "base_market_cap": 100, "track_status": "done"})
@@ -24,7 +25,7 @@ def test_tokens_endpoint_lists_all(tmp_path):
     c = _client(tmp_path)
     r = c.get("/api/tokens")
     assert r.status_code == 200
-    assert {t["task_id"] for t in r.json()} == {"low", "hi"}
+    assert {t["task_id"] for t in r.json()} == {"low"}
 
 
 def test_token_detail(tmp_path):
@@ -32,6 +33,7 @@ def test_token_detail(tmp_path):
     r = c.get("/api/tokens/low")
     assert r.status_code == 200
     assert r.json()["symbol"] == "L"
+    assert c.get("/api/tokens/hi").status_code == 404
     assert c.get("/api/tokens/missing").status_code == 404
 
 

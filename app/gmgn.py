@@ -79,6 +79,8 @@ def parse_token_security(raw: Any) -> dict:
         "burn_status": d.get("burn_status", None),
         "renounced_mint": _yn(d.get("renounced_mint")),
         "renounced_freeze": _yn(d.get("renounced_freeze_account")),
+        "can_not_sell": _i(d.get("can_not_sell")),
+        "is_blacklist": _yn(d.get("is_blacklist")),
     }
 
 
@@ -87,6 +89,7 @@ _CHAIN_MAP = {
     "ethereum": "eth", "eth": "eth",
     "bsc": "bsc", "bnb": "bsc",
     "base": "base",
+    "robinhood": "robinhood", "rhd": "robinhood",
 }
 
 
