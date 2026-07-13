@@ -1,0 +1,32 @@
+name: Evolution Scheduler
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: npm install -g gmgn-cli
+      - run: python -m jobs.evolution
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RADAR_PASSWORD: ${{ secrets.RADAR_PASSWORD }}
+          RADAR_BASE_URL: https://aichain.goldriver.xyz
+          RADAR_USERNAME: haifeng
+          GMGN_CLI: gmgn-cli
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: https://claude.biteagle.xyz/v1
+          LLM_MODEL_FAST: claude-haiku-4-5-20251001
+          LLM_MODEL_PRO: claude-sonnet-4-6
+          LANGFUSE_HOST: https://langfuse.biteagle.xyz
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}

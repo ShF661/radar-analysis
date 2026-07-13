@@ -1,0 +1,27 @@
+name: Price Update
+
+on:
+  schedule:
+    - cron: "3 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: npm install -g gmgn-cli
+      - run: python -m jobs.price_update
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RADAR_PASSWORD: ${{ secrets.RADAR_PASSWORD }}
+          RADAR_BASE_URL: https://aichain.goldriver.xyz
+          RADAR_USERNAME: haifeng
+          RADAR_CHAINS: sol,eth,bsc,robinhood
+          GMGN_CLI: gmgn-cli
+          TRACK_HOURS: "24"
