@@ -19,7 +19,7 @@ class Settings:
     track_hours: int = field(default_factory=lambda: int(os.getenv("TRACK_HOURS", "24")))
     db_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "./radar.db"))
     gmgn_cli: str = field(default_factory=lambda: os.getenv("GMGN_CLI", "gmgn-cli"))
-    api_port: int = field(default_factory=lambda: int(os.getenv("API_PORT", "8000")))
+    api_port: int = field(default_factory=lambda: int(os.getenv("PORT", os.getenv("API_PORT", "8000"))))
     gmgn_delay: float = field(default_factory=lambda: float(os.getenv("GMGN_DELAY", "0.8")))
     feishu_webhook: str = field(default_factory=lambda: os.getenv("FEISHU_WEBHOOK", ""))
     langfuse_secret_key: str = field(default_factory=lambda: os.getenv("LANGFUSE_SECRET_KEY", ""))

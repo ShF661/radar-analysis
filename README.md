@@ -1,3 +1,12 @@
+---
+title: Radar Analysis
+emoji: 🐕
+colorFrom: yellow
+colorTo: orange
+sdk: docker
+app_port: 7860
+---
+
 # 金狗雷达 · GMGN 特征分析
 
 ## 安装
