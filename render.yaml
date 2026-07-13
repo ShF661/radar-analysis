@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: radar-analysis
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: RADAR_BASE_URL
+        value: https://aichain.goldriver.xyz
+      - key: RADAR_USERNAME
+        value: haifeng
+      - key: RADAR_PASSWORD
+        sync: false
+      - key: RADAR_CHAINS
+        value: "sol,eth,bsc,robinhood"
+      - key: DISCOVER_INTERVAL
+        value: "5"
+      - key: PRICE_INTERVAL
+        value: "60"
+      - key: TRACK_HOURS
+        value: "24"
+      - key: GMGN_CLI
+        value: gmgn-cli
+      - key: DATABASE_URL
+        sync: false
+      - key: FEISHU_WEBHOOK
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://claude.biteagle.xyz/v1
+      - key: LLM_MODEL_FAST
+        value: claude-haiku-4-5-20251001
+      - key: LLM_MODEL_PRO
+        value: claude-sonnet-4-6
+      - key: LANGFUSE_HOST
+        value: https://langfuse.biteagle.xyz
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
