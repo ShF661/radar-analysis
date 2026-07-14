@@ -81,3 +81,16 @@ def test_tracking_ids_filters_done(tmp_path):
     db.insert_entry({"task_id": "a", "track_status": "tracking", "base_market_cap": 1.0})
     db.insert_entry({"task_id": "b", "track_status": "done", "base_market_cap": 1.0})
     assert db.tracking_ids() == ["a"]
+
+
+def test_enrichment_ids_include_done_rows_and_respect_attempt_limit(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.init_schema()
+    db.insert_entry({"task_id": "done-missing", "address": "a", "chain": "sol",
+                     "track_status": "done", "gmgn_ok": 0, "enrich_attempts": 0})
+    db.insert_entry({"task_id": "ok", "address": "b", "chain": "sol",
+                     "track_status": "done", "gmgn_ok": 1, "renounced_mint": "yes"})
+    db.insert_entry({"task_id": "exhausted", "address": "c", "chain": "sol",
+                     "track_status": "done", "gmgn_ok": 0, "enrich_attempts": 5})
+
+    assert db.enrichment_ids() == ["done-missing"]

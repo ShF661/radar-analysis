@@ -148,6 +148,23 @@ class Database:
             cur = self._exec("SELECT task_id FROM tokens WHERE track_status='tracking'")
             return [r["task_id"] for r in cur.fetchall()]
 
+    def enrichment_ids(self, limit: int = 50) -> list[str]:
+        """Return recent rows whose GMGN snapshot still needs collection."""
+        with self._lock:
+            cur = self._exec(
+                """SELECT task_id FROM tokens
+                   WHERE address IS NOT NULL
+                     AND COALESCE(enrich_attempts, 0) < 5
+                     AND (
+                       COALESCE(gmgn_ok, 0) = 0
+                       OR (chain = 'sol' AND renounced_mint IS NULL)
+                     )
+                   ORDER BY pushed_at DESC
+                   LIMIT %s""",
+                (limit,),
+            )
+            return [r["task_id"] for r in cur.fetchall()]
+
     def update_price(self, task_id: str, current_market_cap: float) -> None:
         with self._lock:
             row = self.get(task_id)

@@ -82,29 +82,39 @@ class RadarClient:
         r.raise_for_status()
         return r
 
-    def fetch_completed_tasks(self, page_size: int = 100) -> list[dict]:
-        r = self._get("/api/v1/tasks", {
-            "state": "completed",
-            "page": 1,
-            "page_size": page_size,
-            "sort_by": "created_at",
-            "sort_order": "desc",
-        })
-        return r.json().get("data", [])
+    def _fetch_tasks_by_state(
+        self, state: str, page_size: int = 100, max_pages: int = 100
+    ) -> list[dict]:
+        out: list[dict] = []
+        for page in range(1, max_pages + 1):
+            r = self._get("/api/v1/tasks", {
+                "state": state,
+                "page": page,
+                "page_size": page_size,
+                "sort_by": "created_at",
+                "sort_order": "desc",
+            })
+            body = r.json()
+            items = body.get("data", [])
+            pagination = body.get("pagination") or {}
+            out.extend(items)
+            total = pagination.get("total") or body.get("total")
+            effective_size = pagination.get("page_size") or page_size
+            if not items or len(items) < effective_size:
+                break
+            if total is not None and len(out) >= total:
+                break
+        return out
 
-    def fetch_filtered_tasks(self, page_size: int = 100) -> list[dict]:
+    def fetch_completed_tasks(self, page_size: int = 100, max_pages: int = 1) -> list[dict]:
+        return self._fetch_tasks_by_state("completed", page_size, max_pages)
+
+    def fetch_filtered_tasks(self, page_size: int = 100, max_pages: int = 1) -> list[dict]:
         """Fetch tasks pre-filtered by the radar backend (metric_filtered / safety_filtered)."""
         out: list[dict] = []
         for state in ("metric_filtered", "safety_filtered"):
             try:
-                r = self._get("/api/v1/tasks", {
-                    "state": state,
-                    "page": 1,
-                    "page_size": page_size,
-                    "sort_by": "created_at",
-                    "sort_order": "desc",
-                })
-                out.extend(r.json().get("data", []))
+                out.extend(self._fetch_tasks_by_state(state, page_size, max_pages))
             except Exception as e:
                 print(f"[radar] fetch_filtered_tasks state={state} error: {e}", flush=True)
         return out

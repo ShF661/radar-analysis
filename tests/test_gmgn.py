@@ -77,13 +77,16 @@ def test_fetch_snapshot_merges_info_and_security(monkeypatch):
     assert snap["is_honeypot"] == "no"
 
 
-def test_fetch_snapshot_failure_sets_flag(monkeypatch):
+def test_fetch_snapshot_failure_sets_flag_and_logs_error(monkeypatch, capsys):
     def boom(*a, **k):
         raise RuntimeError("cli failed")
 
     monkeypatch.setattr(gmgn_mod, "run_gmgn", boom)
     snap = gmgn_mod.fetch_snapshot("gmgn-cli", "sol", "TKN")
     assert snap["gmgn_ok"] is False
+    err = capsys.readouterr().err
+    assert "[gmgn] snapshot failed chain=sol address=TKN" in err
+    assert "RuntimeError: cli failed" in err
 
 
 def test_parse_token_security_normalizes_booleans():

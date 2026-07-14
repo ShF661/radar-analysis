@@ -2,12 +2,19 @@ name: Discover Tokens
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # GitHub cron is best-effort. One bounded watcher per hour avoids relying
+    # on twelve separate five-minute schedule events.
+    - cron: "17 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: discover-watcher
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,6 +31,9 @@ jobs:
           RADAR_USERNAME: haifeng
           RADAR_CHAINS: sol,eth,bsc,robinhood
           GMGN_CLI: gmgn-cli
+          DISCOVER_INTERVAL: "30"
+          DISCOVER_CATCHUP_PAGES: "10"
+          DISCOVER_RUN_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: https://claude.biteagle.xyz/v1
           LLM_MODEL_FAST: claude-haiku-4-5-20251001

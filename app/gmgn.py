@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from typing import Any, Optional
 
 
@@ -123,7 +124,13 @@ def fetch_snapshot(cli: str, chain: str, address: str) -> dict:
         sec_raw = run_gmgn(cli, "security", chain, address)
         snap.update(parse_token_security(sec_raw))
         snap["gmgn_ok"] = True
-    except Exception:
+    except Exception as exc:
+        print(
+            f"[gmgn] snapshot failed chain={chain} address={address} "
+            f"error={type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
         return snap
     return snap
 

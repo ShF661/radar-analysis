@@ -38,21 +38,32 @@ def main() -> None:
         print(f"[price] radar login failed (will skip backtest): {e}", flush=True)
 
     count = 0
+    enrich_attempted = 0
+    enrich_succeeded = 0
     try:
-        for tid in db.tracking_ids():
+        tracking_ids = set(db.tracking_ids())
+        enrich_limit = int(os.getenv("GMGN_ENRICH_LIMIT", "50"))
+        enrich_ids = db.enrichment_ids(limit=enrich_limit)
+        # Missing snapshots are processed even when backtest has already marked
+        # the token done. dict.fromkeys keeps the newest enrichment order.
+        task_ids = list(dict.fromkeys(enrich_ids + list(tracking_ids)))
+
+        for tid in task_ids:
             row = db.get(tid)
             if not row:
                 continue
 
-            needs_enrich = not row.get("gmgn_ok") or (
-                row.get("chain") == "sol" and row.get("renounced_mint") is None
-            )
-            if needs_enrich and (row.get("enrich_attempts") or 0) < 5:
+            if tid in enrich_ids:
+                enrich_attempted += 1
                 snap = c._snapshot_fn(row.get("chain") or "", row.get("address") or "")
                 if snap.get("gmgn_ok"):
                     db.update_snapshot(tid, snap)
+                    enrich_succeeded += 1
                     print(f"[price] re-enriched {row.get('symbol')}", flush=True)
                 db.bump_enrich(tid)
+
+            if tid not in tracking_ids:
+                continue
 
             bt = c._backtest_fn(row.get("chain") or "", row.get("address") or "", row.get("pushed_at"))
             if bt:
@@ -69,7 +80,14 @@ def main() -> None:
         c._client.close()
         db.close()
 
-    print(f"[price] done, updated {count} tokens", flush=True)
+    print(
+        f"[price] done, updated={count} enrich_attempted={enrich_attempted} "
+        f"enrich_succeeded={enrich_succeeded} enrich_failed={enrich_attempted - enrich_succeeded}",
+        flush=True,
+    )
+    if enrich_attempted and enrich_succeeded == 0:
+        print("[price] all GMGN enrichment attempts failed", file=sys.stderr, flush=True)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

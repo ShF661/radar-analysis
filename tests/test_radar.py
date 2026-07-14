@@ -61,6 +61,28 @@ def test_fetch_completed_tasks_returns_data_list():
     assert [t["id"] for t in tasks] == ["t1", "t2"]
 
 
+def test_fetch_completed_tasks_reads_all_pages():
+    requested_pages = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/auth/login":
+            return httpx.Response(200, json={"access_token": "AT", "refresh_token": "RT"})
+        page = int(request.url.params["page"])
+        requested_pages.append(page)
+        data = [{"id": f"t{page}"}] if page <= 3 else []
+        return httpx.Response(200, json={
+            "data": data,
+            "pagination": {"page": page, "page_size": 1, "total": 3},
+        })
+
+    client = RadarClient("http://x", "u", "p", transport=_mock_transport(handler))
+    client.login()
+    tasks = client.fetch_completed_tasks(page_size=1, max_pages=100)
+
+    assert [t["id"] for t in tasks] == ["t1", "t2", "t3"]
+    assert requested_pages == [1, 2, 3]
+
+
 def test_request_retries_once_after_401_refresh():
     state = {"n": 0}
 
