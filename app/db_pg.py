@@ -143,25 +143,33 @@ class Database:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def all_signals(self) -> list[dict]:
+        """Return every accepted radar signal, including pending backtests."""
+        with self._lock:
+            cur = self._exec(
+                "SELECT * FROM tokens WHERE filter_type IS NULL ORDER BY pushed_at DESC"
+            )
+            return [dict(r) for r in cur.fetchall()]
+
     def tracking_ids(self) -> list[str]:
         with self._lock:
             cur = self._exec("SELECT task_id FROM tokens WHERE track_status='tracking'")
             return [r["task_id"] for r in cur.fetchall()]
 
-    def enrichment_ids(self, limit: int = 50) -> list[str]:
+    def enrichment_ids(self, limit: int = 50, max_attempts: int = 20) -> list[str]:
         """Return recent rows whose GMGN snapshot still needs collection."""
         with self._lock:
             cur = self._exec(
                 """SELECT task_id FROM tokens
                    WHERE address IS NOT NULL
-                     AND COALESCE(enrich_attempts, 0) < 5
+                     AND COALESCE(enrich_attempts, 0) < %s
                      AND (
                        COALESCE(gmgn_ok, 0) = 0
                        OR (chain = 'sol' AND renounced_mint IS NULL)
                      )
                    ORDER BY pushed_at DESC
                    LIMIT %s""",
-                (limit,),
+                (max_attempts, limit),
             )
             return [r["task_id"] for r in cur.fetchall()]
 

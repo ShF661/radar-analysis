@@ -23,7 +23,12 @@ def main() -> None:
     from app.config import load_settings
     from app.db_pg import Database
     from evolution.db_pg import EvolutionDB
-    from app.collector import Collector, process_new_task, process_prefiltered_task
+    from app.collector import (
+        Collector,
+        process_new_task,
+        process_prefiltered_task,
+        snapshot_from_preanalysis,
+    )
     from app.radar import parse_task
     from app.signal_filter_store import load_config
 
@@ -63,8 +68,11 @@ def main() -> None:
                     if not base or base["chain"] not in settings.chains:
                         continue
                     if db.exists(base["task_id"]):
+                        cur = db.get(base["task_id"])
+                        fallback = snapshot_from_preanalysis(task)
+                        if cur and not cur.get("gmgn_ok") and fallback.get("gmgn_ok"):
+                            db.update_snapshot(base["task_id"], fallback)
                         if base.get("grade"):
-                            cur = db.get(base["task_id"])
                             if cur and not cur.get("grade"):
                                 db.update_grade(base["task_id"], base["grade"])
                         continue

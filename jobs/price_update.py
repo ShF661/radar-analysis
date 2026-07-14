@@ -43,7 +43,7 @@ def main() -> None:
     try:
         tracking_ids = set(db.tracking_ids())
         enrich_limit = int(os.getenv("GMGN_ENRICH_LIMIT", "50"))
-        enrich_ids = db.enrichment_ids(limit=enrich_limit)
+        enrich_ids = db.enrichment_ids(limit=enrich_limit, max_attempts=20)
         # Missing snapshots are processed even when backtest has already marked
         # the token done. dict.fromkeys keeps the newest enrichment order.
         task_ids = list(dict.fromkeys(enrich_ids + list(tracking_ids)))

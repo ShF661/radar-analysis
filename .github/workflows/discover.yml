@@ -1,6 +1,12 @@
 name: Discover Tokens
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "jobs/discover.py"
+      - ".github/workflows/discover.yml"
   schedule:
     # GitHub cron is best-effort. One bounded watcher per hour avoids relying
     # on twelve separate five-minute schedule events.
@@ -34,7 +40,7 @@ jobs:
           GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           DISCOVER_INTERVAL: "30"
           DISCOVER_CATCHUP_PAGES: "10"
-          DISCOVER_RUN_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
+          DISCOVER_RUN_SECONDS: ${{ github.event_name == 'workflow_dispatch' && '0' || '3300' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: https://claude.biteagle.xyz/v1
           LLM_MODEL_FAST: claude-haiku-4-5-20251001

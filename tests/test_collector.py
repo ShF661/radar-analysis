@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from app.collector import build_entry_row, process_new_task, refresh_one
+from app.collector import build_entry_row, process_new_task, refresh_one, snapshot_from_preanalysis
 from app.db import Database
 
 FX = Path(__file__).parent / "fixtures"
@@ -60,6 +60,51 @@ def test_process_new_task_inserts(tmp_path):
     db.init_schema()
     process_new_task(db, _task(), lambda chain, addr: _snapshot())
     assert db.exists("task-123")
+
+
+def test_snapshot_from_preanalysis_maps_indicator_fields():
+    task = _task()
+    task["input"]["preanalysis"] = {
+        "metrics": {
+            "available": True,
+            "values": {
+                "bundler_wallet_rate": {"value": 0.31},
+                "fresh_wallet_rate": {"value": 0.52},
+                "smart_wallet_count": {"value": 4},
+                "top_10_holder_rate": {"value": 0.22},
+            },
+        },
+        "security": {"available": True, "renounced_mint": "yes"},
+    }
+
+    snap = snapshot_from_preanalysis(task)
+    assert snap["gmgn_ok"] is True
+    assert snap["bundler_rate"] == 0.31
+    assert snap["fresh_wallet_rate"] == 0.52
+    assert snap["smart_wallets"] == 4
+    assert snap["top10_rate"] == 0.22
+    assert snap["renounced_mint"] == "yes"
+
+
+def test_process_new_task_prefers_preanalysis_without_calling_cli(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.init_schema()
+    task = _task()
+    task["input"]["preanalysis"] = {
+        "metrics": {
+            "available": True,
+            "values": {"bundler_wallet_rate": {"value": 0.44}},
+        },
+        "security": {"available": True},
+    }
+
+    def should_not_run(*_args):
+        raise AssertionError("gmgn-cli should not run when preanalysis is available")
+
+    process_new_task(db, task, should_not_run)
+    row = db.get("task-123")
+    assert row["gmgn_ok"] == 1
+    assert row["bundler_rate"] == 0.44
 
 
 def test_process_new_task_applies_backtest_fn(tmp_path):

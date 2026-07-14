@@ -93,4 +93,14 @@ def test_enrichment_ids_include_done_rows_and_respect_attempt_limit(tmp_path):
     db.insert_entry({"task_id": "exhausted", "address": "c", "chain": "sol",
                      "track_status": "done", "gmgn_ok": 0, "enrich_attempts": 5})
 
-    assert db.enrichment_ids() == ["done-missing"]
+    assert db.enrichment_ids(max_attempts=5) == ["done-missing"]
+
+
+def test_all_signals_includes_pending_backtests_but_not_filtered(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.init_schema()
+    db.insert_entry({"task_id": "pending", "track_status": "tracking"})
+    db.insert_entry({"task_id": "backtested", "backtest_id": "bt"})
+    db.insert_entry({"task_id": "filtered", "filter_type": "metric"})
+
+    assert {row["task_id"] for row in db.all_signals()} == {"pending", "backtested"}

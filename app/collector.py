@@ -18,6 +18,49 @@ MarketCapFn = Callable[[str, str], float]
 BacktestFn = Callable[[str, str, str | None], dict | None]
 
 
+def _preanalysis_value(values: dict, key: str):
+    item = values.get(key)
+    return item.get("value") if isinstance(item, dict) else None
+
+
+def snapshot_from_preanalysis(task: dict) -> dict:
+    """Build the push-time indicator snapshot already attached by radar.
+
+    Radar preanalysis is itself collected from the same on-chain indicator
+    source. Reusing it keeps the original push-time values and avoids losing
+    every indicator when a runner cannot reach gmgn-cli.
+    """
+    preanalysis = ((task.get("input") or {}).get("preanalysis") or {})
+    metrics = preanalysis.get("metrics") or {}
+    security = preanalysis.get("security") or {}
+    values = metrics.get("values") or {}
+    available = bool(metrics.get("available") or security.get("available"))
+    if not available:
+        return {"gmgn_ok": False}
+
+    return {
+        "gmgn_ok": True,
+        "liquidity": _preanalysis_value(values, "liquidity"),
+        "market_cap": _preanalysis_value(values, "market_cap"),
+        "volume_24h": _preanalysis_value(values, "volume_24h"),
+        "holder_count": _preanalysis_value(values, "holder_count"),
+        "top10_rate": _preanalysis_value(values, "top_10_holder_rate"),
+        "dev_hold_rate": _preanalysis_value(values, "dev_team_hold_rate"),
+        "bundler_rate": _preanalysis_value(values, "bundler_wallet_rate"),
+        "fresh_wallet_rate": _preanalysis_value(values, "fresh_wallet_rate"),
+        "entrapment_rate": _preanalysis_value(values, "entrapment_wallet_rate"),
+        "bot_degen_rate": _preanalysis_value(values, "bot_trading_rate"),
+        "rat_rate": _preanalysis_value(values, "rat_trader_rate"),
+        "smart_wallets": _preanalysis_value(values, "smart_wallet_count"),
+        "kol_wallets": _preanalysis_value(values, "kol_wallet_count"),
+        "turnover": _preanalysis_value(values, "turnover_rate"),
+        "avg_holding_usd": _preanalysis_value(values, "avg_holder_value"),
+        "renounced_mint": security.get("renounced_mint"),
+        "renounced_freeze": security.get("renounced_freeze_account"),
+        "can_not_sell": security.get("can_not_sell"),
+    }
+
+
 def _parse_iso(ts: str | None) -> datetime | None:
     if not ts:
         return None
@@ -184,7 +227,7 @@ def process_prefiltered_task(db: Database, task: dict) -> None:
     else:
         matched_rules = []
 
-    db.mark_filtered(base["task_id"], filter_type, matched_rules, {})
+    db.mark_filtered(base["task_id"], filter_type, matched_rules, {"gmgn_ok": pa_ok})
 
     print(
         f"[discover] pre-filtered {filter_type} {base.get('symbol')} ({base['chain']}) "
@@ -206,7 +249,9 @@ def process_new_task(
         return
     if db.exists(base["task_id"]):
         return
-    snapshot = snapshot_fn(base["chain"], base["address"])
+    snapshot = snapshot_from_preanalysis(task)
+    if not snapshot.get("gmgn_ok"):
+        snapshot = snapshot_fn(base["chain"], base["address"])
 
     # Signal filter: safety + metric layers (before any further processing)
     if filter_config is not None:
@@ -287,6 +332,7 @@ class Collector:
         return self._client.find_backtest_token(address, chain, pushed_at)
 
     def discover_loop(self) -> None:
+        first_pass = True
         while not self._stop.is_set():
             try:
                 self._client.login()
@@ -296,13 +342,18 @@ class Collector:
                 continue
             while not self._stop.is_set():
                 try:
-                    for task in self._client.fetch_completed_tasks():
+                    max_pages = 10 if first_pass else 1
+                    for task in self._client.fetch_completed_tasks(max_pages=max_pages):
                         base = parse_task(task)
                         if not base or base["chain"] not in self.s.chains:
                             continue
                         if self.db.exists(base["task_id"]):
+                            cur = self.db.get(base["task_id"])
+                            fallback = snapshot_from_preanalysis(task)
+                            if cur and not cur.get("gmgn_ok") and fallback.get("gmgn_ok"):
+                                self.db.update_snapshot(base["task_id"], fallback)
+                                print(f"[discover] restored indicators for {base.get('symbol')}", flush=True)
                             if base.get("grade"):
-                                cur = self.db.get(base["task_id"])
                                 if cur and not cur.get("grade"):
                                     self.db.update_grade(base["task_id"], base["grade"])
                             continue
@@ -313,7 +364,7 @@ class Collector:
                         print(f"[discover] saved {base.get('symbol')} ({base['chain']}) task={base['task_id']}", flush=True)
                         self._stop.wait(self.s.gmgn_delay)
 
-                    for task in self._client.fetch_filtered_tasks():
+                    for task in self._client.fetch_filtered_tasks(max_pages=max_pages):
                         base = parse_task(task)
                         if not base or base["chain"] not in self.s.chains:
                             continue
@@ -321,6 +372,7 @@ class Collector:
                             continue
                         process_prefiltered_task(self.db, task)
                         self._stop.wait(self.s.gmgn_delay)
+                    first_pass = False
                 except Exception as e:
                     print(f"[discover] error: {e}", flush=True)
                     break
@@ -330,18 +382,23 @@ class Collector:
         self._stop.wait(10)  # let discover_loop complete login first
         while not self._stop.is_set():
             try:
-                for tid in self.db.tracking_ids():
+                tracking_ids = set(self.db.tracking_ids())
+                enrichment_ids = self.db.enrichment_ids(limit=50, max_attempts=20)
+                task_ids = list(dict.fromkeys(enrichment_ids + list(tracking_ids)))
+                for tid in task_ids:
                     row = self.db.get(tid)
                     if not row:
                         continue
-                    needs = not row.get("gmgn_ok") or (row.get("chain") == "sol" and row.get("renounced_mint") is None)
-                    if needs and (row.get("enrich_attempts") or 0) < 5:
+                    if tid in enrichment_ids:
                         snap = self._snapshot_fn(row.get("chain") or "", row.get("address") or "")
                         if snap.get("gmgn_ok"):
                             self.db.update_snapshot(tid, snap)
                             print(f"[price] re-enriched {row.get('symbol')}", flush=True)
                         self.db.bump_enrich(tid)
                         self._stop.wait(self.s.gmgn_delay)
+
+                    if tid not in tracking_ids:
+                        continue
 
                     bt = self._backtest_fn(row.get("chain") or "", row.get("address") or "", row.get("pushed_at"))
                     if bt:

@@ -50,12 +50,12 @@ def create_app(db: Database, db_path: str = "./radar.db", gmgn_cli: str = "gmgn-
 
     @app.get("/api/tokens")
     def list_tokens():
-        return db.all_backtested()
+        return db.all_signals()
 
     @app.get("/api/tokens/{task_id}")
     def token_detail(task_id: str):
         row = db.get(task_id)
-        if not row or not row.get("backtest_id"):
+        if not row or row.get("filter_type") is not None:
             raise HTTPException(status_code=404, detail="not found")
         return row
 
