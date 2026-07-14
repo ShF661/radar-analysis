@@ -83,6 +83,29 @@ def test_fetch_completed_tasks_reads_all_pages():
     assert requested_pages == [1, 2, 3]
 
 
+def test_fetch_filtered_tasks_rejects_wrong_states_from_backend():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/auth/login":
+            return httpx.Response(200, json={"access_token": "AT", "refresh_token": "RT"})
+        requested_state = request.url.params["state"]
+        return httpx.Response(200, json={
+            "data": [
+                {"id": f"{requested_state}-ok", "state": requested_state},
+                {"id": "wrong", "state": "completed"},
+            ],
+            "pagination": {"page": 1, "page_size": 100, "total": 2},
+        })
+
+    client = RadarClient("http://x", "u", "p", transport=_mock_transport(handler))
+    client.login()
+
+    tasks = client.fetch_filtered_tasks()
+    assert [task["id"] for task in tasks] == [
+        "metric_filtered-ok",
+        "safety_filtered-ok",
+    ]
+
+
 def test_request_retries_once_after_401_refresh():
     state = {"n": 0}
 

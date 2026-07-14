@@ -23,6 +23,7 @@ jobs:
           RADAR_BASE_URL: https://aichain.goldriver.xyz
           RADAR_USERNAME: haifeng
           GMGN_CLI: gmgn-cli
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: https://claude.biteagle.xyz/v1
           LLM_MODEL_FAST: claude-haiku-4-5-20251001

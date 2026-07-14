@@ -114,7 +114,10 @@ class RadarClient:
         out: list[dict] = []
         for state in ("metric_filtered", "safety_filtered"):
             try:
-                out.extend(self._fetch_tasks_by_state(state, page_size, max_pages))
+                tasks = self._fetch_tasks_by_state(state, page_size, max_pages)
+                # Some radar deployments do not apply the state query reliably.
+                # Never persist completed/analyzing tasks as filtered records.
+                out.extend(task for task in tasks if task.get("state") == state)
             except Exception as e:
                 print(f"[radar] fetch_filtered_tasks state={state} error: {e}", flush=True)
         return out

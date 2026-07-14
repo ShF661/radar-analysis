@@ -24,4 +24,5 @@ jobs:
           RADAR_USERNAME: haifeng
           RADAR_CHAINS: sol,eth,bsc,robinhood
           GMGN_CLI: gmgn-cli
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           TRACK_HOURS: "24"

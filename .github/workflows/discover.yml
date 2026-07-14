@@ -31,6 +31,7 @@ jobs:
           RADAR_USERNAME: haifeng
           RADAR_CHAINS: sol,eth,bsc,robinhood
           GMGN_CLI: gmgn-cli
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           DISCOVER_INTERVAL: "30"
           DISCOVER_CATCHUP_PAGES: "10"
           DISCOVER_RUN_SECONDS: ${{ github.event_name == 'schedule' && '3300' || '0' }}
